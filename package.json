@@ -1,0 +1,43 @@
+{
+  "name": "ravdownloader",
+  "version": "2.0.0",
+  "description": "RAVdownloader by Colin - Premium Video Downloader",
+  "main": "src/main.js",
+  "scripts": {
+    "start": "electron .",
+    "build": "electron-builder --win --x64",
+    "pack": "electron-builder --dir"
+  },
+  "build": {
+    "appId": "com.colin.ravdownloader",
+    "productName": "RAVdownloader",
+    "win": {
+      "target": [{ "target": "nsis", "arch": ["x64"] }],
+      "icon": "assets/icon.ico",
+      "requestedExecutionLevel": "requireAdministrator"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": false,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "RAVdownloader",
+      "deleteAppDataOnUninstall": false,
+      "uninstallDisplayName": "RAVdownloader by Colin",
+      "include": "installer.nsh"
+    },
+    "extraResources": [
+      { "from": "bin/", "to": "bin/", "filter": ["**/*"] }
+    ],
+    "files": [
+      "src/**/*",
+      "assets/**/*",
+      "node_modules/**/*",
+      "package.json"
+    ]
+  },
+  "devDependencies": {
+    "electron": "^28.0.0",
+    "electron-builder": "^24.0.0"
+  }
+}

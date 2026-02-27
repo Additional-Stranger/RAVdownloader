@@ -1,0 +1,1212 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>RAVdownloader by Colin</title>
+<style>
+/* ── Fonts ── */
+@import url('https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=DM+Mono:wght@300;400;500&display=swap');
+
+:root {
+  --bg: #0c0c0e;
+  --bg2: #111114;
+  --bg3: #16161a;
+  --bg4: #1c1c22;
+  --border: rgba(255,255,255,0.07);
+  --border2: rgba(255,255,255,0.12);
+  --accent: #e8ff47;
+  --accent2: #c8e820;
+  --accent-dim: rgba(232,255,71,0.12);
+  --accent-glow: rgba(232,255,71,0.25);
+  --text: #f0f0f0;
+  --text2: #9a9aa8;
+  --text3: #5a5a6a;
+  --red: #ff4a4a;
+  --green: #47ffb0;
+  --blue: #4ab3ff;
+  --orange: #ffaa47;
+  --radius: 12px;
+  --radius-sm: 8px;
+  --font: 'Syne', sans-serif;
+  --mono: 'DM Mono', monospace;
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { height: 100%; overflow: hidden; background: var(--bg); color: var(--text); font-family: var(--font); }
+
+/* ── Scrollbar ── */
+::-webkit-scrollbar { width: 5px; height: 5px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 99px; }
+::-webkit-scrollbar-thumb:hover { background: var(--text3); }
+
+/* ── Titlebar ── */
+#titlebar {
+  display: flex; align-items: center; justify-content: space-between;
+  height: 44px; padding: 0 16px;
+  background: var(--bg2); border-bottom: 1px solid var(--border);
+  -webkit-app-region: drag; user-select: none; flex-shrink: 0;
+}
+#titlebar-logo { display: flex; align-items: center; gap: 10px; }
+#titlebar-logo .logo-mark {
+  width: 26px; height: 26px; background: var(--accent); border-radius: 6px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 13px; font-weight: 800; color: #000; line-height: 1;
+}
+#titlebar-logo .logo-text { font-size: 13px; font-weight: 700; letter-spacing: 0.03em; color: var(--text); }
+#titlebar-logo .logo-text span { color: var(--accent); }
+#titlebar-controls { display: flex; gap: 6px; -webkit-app-region: no-drag; }
+.tc-btn {
+  width: 28px; height: 28px; border-radius: 7px; border: none; cursor: pointer;
+  display: flex; align-items: center; justify-content: center; font-size: 12px;
+  background: var(--bg3); color: var(--text2); transition: all 0.15s;
+}
+.tc-btn:hover { background: var(--bg4); color: var(--text); }
+.tc-btn.close:hover { background: var(--red); color: #fff; }
+
+/* ── Layout ── */
+#app { display: flex; flex-direction: column; height: 100vh; }
+#main { display: flex; flex: 1; overflow: hidden; }
+
+/* ── Sidebar ── */
+#sidebar {
+  width: 220px; flex-shrink: 0; background: var(--bg2);
+  border-right: 1px solid var(--border); display: flex; flex-direction: column;
+  padding: 20px 12px;
+  -webkit-app-region: no-drag;
+}
+.sidebar-section { margin-bottom: 24px; }
+.sidebar-label { font-size: 10px; font-weight: 600; letter-spacing: 0.1em; color: var(--text3); text-transform: uppercase; padding: 0 8px; margin-bottom: 8px; }
+.nav-btn {
+  display: flex; align-items: center; gap: 10px; width: 100%;
+  padding: 9px 12px; border-radius: var(--radius-sm); border: none; cursor: pointer;
+  background: transparent; color: var(--text2); font-family: var(--font);
+  font-size: 13px; font-weight: 500; transition: all 0.15s; text-align: left;
+}
+.nav-btn svg { width: 16px; height: 16px; flex-shrink: 0; opacity: 0.7; }
+.nav-btn:hover { background: var(--bg3); color: var(--text); }
+.nav-btn:hover svg { opacity: 1; }
+.nav-btn.active { background: var(--accent-dim); color: var(--accent); border: 1px solid rgba(232,255,71,0.2); }
+.nav-btn.active svg { opacity: 1; }
+
+.sidebar-divider { height: 1px; background: var(--border); margin: 12px 0; }
+.sidebar-bottom { margin-top: auto; }
+.version-badge {
+  padding: 10px 12px; background: var(--bg3); border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+}
+.version-badge .vb-label { font-size: 10px; color: var(--text3); font-family: var(--mono); margin-bottom: 2px; }
+.version-badge .vb-value { font-size: 12px; color: var(--accent); font-family: var(--mono); font-weight: 500; }
+.credit-tag { font-size: 11px; color: var(--text3); padding: 8px 12px; margin-top: 8px; }
+.credit-tag span { color: var(--text2); }
+
+/* ── Content ── */
+#content { flex: 1; overflow-y: auto; overflow-x: hidden; padding: 28px 32px; -webkit-app-region: no-drag; }
+
+/* ── Views ── */
+.view { display: none; }
+.view.active { display: block; }
+
+/* ── Page Header ── */
+.page-header { margin-bottom: 28px; }
+.page-title { font-size: 26px; font-weight: 800; letter-spacing: -0.02em; color: var(--text); margin-bottom: 4px; }
+.page-title span { color: var(--accent); }
+.page-subtitle { font-size: 13px; color: var(--text2); }
+
+/* ── Cards ── */
+.card {
+  background: var(--bg2); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 20px; margin-bottom: 16px;
+}
+.card-title { font-size: 12px; font-weight: 600; letter-spacing: 0.07em; color: var(--text3); text-transform: uppercase; margin-bottom: 16px; }
+
+/* ── Input URL area ── */
+.url-input-wrap {
+  display: flex; gap: 10px; align-items: stretch;
+  background: var(--bg3); border: 1px solid var(--border); border-radius: var(--radius);
+  padding: 6px 6px 6px 16px; transition: border-color 0.2s;
+}
+.url-input-wrap:focus-within { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-glow); }
+#url-input {
+  flex: 1; background: transparent; border: none; outline: none;
+  color: var(--text); font-family: var(--font); font-size: 14px;
+  caret-color: var(--accent);
+}
+#url-input::placeholder { color: var(--text3); }
+
+.type-select {
+  background: var(--bg4); border: 1px solid var(--border); border-radius: 8px;
+  color: var(--text); font-family: var(--font); font-size: 13px; font-weight: 600;
+  padding: 0 14px; cursor: pointer; outline: none;
+  appearance: none; -webkit-appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%239a9aa8'/%3E%3C/svg%3E");
+  background-repeat: no-repeat; background-position: right 10px center;
+  padding-right: 28px;
+}
+
+.add-btn {
+  background: var(--accent); color: #000; font-family: var(--font); font-size: 13px;
+  font-weight: 700; border: none; border-radius: 8px; padding: 0 20px;
+  cursor: pointer; transition: all 0.15s; white-space: nowrap;
+  letter-spacing: 0.02em;
+}
+.add-btn:hover { background: var(--accent2); transform: translateY(-1px); }
+.add-btn:active { transform: translateY(0); }
+.add-btn.download-mode {
+  background: linear-gradient(135deg, #3dfaac, #22c97e);
+  color: #000;
+  box-shadow: 0 0 16px rgba(61,250,172,0.35);
+}
+.add-btn.download-mode:hover { background: linear-gradient(135deg, #22c97e, #1aad6a); box-shadow: 0 0 24px rgba(61,250,172,0.5); }
+
+.options-row { display: flex; align-items: center; gap: 20px; margin-top: 12px; }
+.toggle-wrap { display: flex; align-items: center; gap: 8px; cursor: pointer; }
+.toggle-wrap input[type=checkbox] { display: none; }
+.toggle {
+  width: 36px; height: 20px; background: var(--bg4); border-radius: 99px;
+  border: 1px solid var(--border2); position: relative; transition: all 0.2s; cursor: pointer;
+}
+.toggle::after {
+  content: ''; position: absolute; top: 3px; left: 3px;
+  width: 12px; height: 12px; background: var(--text3);
+  border-radius: 50%; transition: all 0.2s;
+}
+.toggle-wrap input:checked + .toggle { background: var(--accent-dim); border-color: var(--accent); }
+.toggle-wrap input:checked + .toggle::after { background: var(--accent); transform: translateX(16px); }
+.toggle-label { font-size: 12px; color: var(--text2); font-weight: 500; }
+
+.bandwidth-wrap { display: flex; align-items: center; gap: 8px; }
+.bandwidth-wrap label { font-size: 12px; color: var(--text2); font-weight: 500; }
+.bw-input {
+  width: 80px; background: var(--bg4); border: 1px solid var(--border); border-radius: 6px;
+  color: var(--text); font-family: var(--mono); font-size: 12px; padding: 4px 8px; outline: none;
+}
+.bw-input:focus { border-color: var(--accent); }
+.bw-unit { font-size: 11px; color: var(--text3); font-family: var(--mono); }
+
+/* ── Queue ── */
+.queue-header {
+  display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;
+}
+.queue-count { font-size: 12px; color: var(--text3); font-family: var(--mono); }
+.queue-actions { display: flex; gap: 8px; }
+
+.btn {
+  padding: 7px 14px; border-radius: 7px; border: none; cursor: pointer;
+  font-family: var(--font); font-size: 12px; font-weight: 600; transition: all 0.15s;
+  letter-spacing: 0.02em;
+}
+.btn-ghost { background: var(--bg3); color: var(--text2); border: 1px solid var(--border); }
+.btn-ghost:hover { background: var(--bg4); color: var(--text); }
+.btn-primary { background: var(--accent); color: #000; }
+.btn-primary:hover { background: var(--accent2); transform: translateY(-1px); }
+.btn-danger { background: rgba(255,74,74,0.15); color: var(--red); border: 1px solid rgba(255,74,74,0.25); }
+.btn-danger:hover { background: rgba(255,74,74,0.25); }
+.btn-success { background: rgba(71,255,176,0.12); color: var(--green); border: 1px solid rgba(71,255,176,0.2); }
+.btn-success:hover { background: rgba(71,255,176,0.2); }
+
+.queue-empty {
+  padding: 48px; text-align: center; color: var(--text3);
+  border: 1px dashed var(--border); border-radius: var(--radius);
+}
+.queue-empty .qe-icon { font-size: 36px; margin-bottom: 12px; opacity: 0.4; }
+.queue-empty p { font-size: 13px; }
+
+/* ── Queue Table ── */
+.queue-table { width: 100%; border-collapse: collapse; }
+.queue-table thead tr { border-bottom: 1px solid var(--border); }
+.queue-table th { text-align: left; padding: 8px 12px; font-size: 10px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--text3); }
+.queue-table tbody tr { border-bottom: 1px solid var(--border); transition: background 0.1s; }
+.queue-table tbody tr:hover { background: var(--bg3); }
+.queue-table tbody tr:last-child { border-bottom: none; }
+.queue-table td { padding: 10px 12px; font-size: 13px; vertical-align: middle; }
+.td-index { width: 40px; color: var(--text3); font-family: var(--mono); font-size: 11px; }
+.td-url { max-width: 320px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text2); font-family: var(--mono); font-size: 11px; }
+.td-type { width: 60px; }
+.td-status { width: 130px; }
+.td-actions { width: 120px; }
+
+.type-tag {
+  display: inline-flex; align-items: center; justify-content: center;
+  padding: 3px 8px; border-radius: 5px; font-size: 11px; font-weight: 700;
+  font-family: var(--mono); letter-spacing: 0.05em;
+}
+.type-tag.mp4 { background: rgba(74,179,255,0.15); color: var(--blue); }
+.type-tag.mp3 { background: rgba(255,170,71,0.15); color: var(--orange); }
+
+.status-tag {
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 3px 8px; border-radius: 5px; font-size: 11px; font-weight: 600; font-family: var(--mono);
+}
+.status-tag.queued { color: var(--text3); background: var(--bg3); }
+.status-tag.downloading { color: var(--accent); background: var(--accent-dim); }
+.status-tag.done { color: var(--green); background: rgba(71,255,176,0.1); }
+.status-tag.error { color: var(--red); background: rgba(255,74,74,0.1); }
+.status-tag.paused { color: var(--orange); background: rgba(255,170,71,0.1); }
+
+.status-dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; flex-shrink: 0; }
+.status-dot.pulse { animation: pulse 1.2s ease-in-out infinite; }
+@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.3} }
+
+.progress-bar-wrap { height: 5px; background: var(--bg4); border-radius: 99px; margin-top: 4px; overflow: hidden; min-width: 120px; }
+.progress-bar-fill { height: 100%; background: linear-gradient(90deg, var(--accent2, #7c6cfc), var(--accent)); border-radius: 99px; transition: width 0.4s ease; width: 0%; }
+
+.row-download-btn {
+  padding: 5px 12px; border-radius: 6px; border: none; cursor: pointer;
+  font-family: var(--font); font-size: 11px; font-weight: 700;
+  background: var(--accent-dim); color: var(--accent); border: 1px solid rgba(232,255,71,0.2);
+  transition: all 0.15s; letter-spacing: 0.03em;
+}
+.row-download-btn:hover { background: var(--accent); color: #000; }
+.row-remove-btn {
+  padding: 5px 8px; border-radius: 6px; border: none; cursor: pointer;
+  background: transparent; color: var(--text3); font-size: 12px; transition: all 0.15s;
+}
+.row-remove-btn:hover { color: var(--red); }
+
+/* ── Progress detail ── */
+.download-log {
+  background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius-sm);
+  padding: 12px; font-family: var(--mono); font-size: 11px; color: var(--text3);
+  max-height: 120px; overflow-y: auto; margin-top: 8px; line-height: 1.6;
+}
+.download-log .log-line { color: var(--text2); }
+.download-log .log-line.progress-line { color: var(--accent); }
+
+/* ── Modal ── */
+.modal-overlay {
+  position: fixed; inset: 0; background: rgba(0,0,0,0.75); z-index: 100;
+  display: flex; align-items: center; justify-content: center;
+  backdrop-filter: blur(4px); opacity: 0; pointer-events: none;
+  transition: opacity 0.2s;
+}
+.modal-overlay.open { opacity: 1; pointer-events: all; }
+.modal {
+  background: var(--bg2); border: 1px solid var(--border2); border-radius: 16px;
+  padding: 28px; width: 460px; max-width: 90vw; max-height: 80vh;
+  overflow-y: auto; position: relative;
+  transform: scale(0.95) translateY(8px); transition: transform 0.2s;
+}
+.modal-overlay.open .modal { transform: scale(1) translateY(0); }
+.modal-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; }
+.modal-title { font-size: 18px; font-weight: 800; letter-spacing: -0.01em; }
+.modal-close {
+  width: 30px; height: 30px; border-radius: 8px; border: none; cursor: pointer;
+  background: var(--bg3); color: var(--text2); font-size: 14px;
+  display: flex; align-items: center; justify-content: center; transition: all 0.15s;
+}
+.modal-close:hover { background: var(--red); color: #fff; }
+
+/* ── Quality picker ── */
+.quality-list { display: flex; flex-direction: column; gap: 8px; }
+.quality-item {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 12px 16px; background: var(--bg3); border: 1px solid var(--border);
+  border-radius: var(--radius-sm); cursor: pointer; transition: all 0.15s;
+}
+.quality-item:hover { border-color: var(--accent); background: var(--accent-dim); }
+.quality-item.best { border-color: rgba(232,255,71,0.3); }
+.quality-label { font-size: 14px; font-weight: 700; }
+.quality-meta { font-size: 11px; color: var(--text3); font-family: var(--mono); }
+.quality-badge {
+  padding: 3px 8px; border-radius: 5px; font-size: 10px; font-weight: 700;
+  letter-spacing: 0.05em; font-family: var(--mono);
+}
+.quality-badge.best-badge { background: var(--accent); color: #000; }
+.quality-badge.res-badge { background: var(--bg4); color: var(--text2); }
+
+/* ── Supported sites ── */
+.sites-search {
+  width: 100%; background: var(--bg3); border: 1px solid var(--border);
+  border-radius: var(--radius-sm); color: var(--text); font-family: var(--font);
+  font-size: 13px; padding: 10px 14px; outline: none; margin-bottom: 12px;
+}
+.sites-search:focus { border-color: var(--accent); }
+.sites-list { max-height: 400px; overflow-y: auto; }
+.site-item { padding: 6px 8px; font-size: 12px; color: var(--text2); font-family: var(--mono); border-radius: 5px; }
+.site-item:hover { background: var(--bg3); color: var(--text); }
+
+/* ── Update view ── */
+.update-card {
+  background: var(--bg3); border: 1px solid var(--border); border-radius: var(--radius);
+  padding: 20px; display: flex; align-items: center; gap: 16px; margin-bottom: 12px;
+}
+.update-card .uc-icon { font-size: 28px; }
+.update-card .uc-info { flex: 1; }
+.update-card .uc-name { font-size: 14px; font-weight: 700; margin-bottom: 2px; }
+.update-card .uc-version { font-size: 12px; color: var(--accent); font-family: var(--mono); }
+.update-log {
+  background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius-sm);
+  padding: 16px; font-family: var(--mono); font-size: 12px; color: var(--text2);
+  min-height: 60px; margin-top: 12px; white-space: pre-wrap; line-height: 1.6;
+}
+
+/* ── Convert view ── */
+.convert-drop-zone {
+  border: 2px dashed var(--border2); border-radius: var(--radius); padding: 40px;
+  text-align: center; cursor: pointer; transition: all 0.2s; margin-bottom: 16px;
+}
+.convert-drop-zone:hover { border-color: var(--accent); background: var(--accent-dim); }
+.convert-drop-zone .dz-icon { font-size: 40px; margin-bottom: 12px; opacity: 0.5; }
+.convert-drop-zone p { font-size: 14px; color: var(--text2); }
+.convert-drop-zone span { font-size: 12px; color: var(--text3); }
+
+.convert-format-row { display: flex; gap: 10px; align-items: center; margin-bottom: 16px; }
+.format-btn {
+  flex: 1; padding: 12px; border-radius: var(--radius-sm); border: 1px solid var(--border);
+  background: var(--bg3); color: var(--text2); cursor: pointer; text-align: center;
+  font-family: var(--font); font-size: 13px; font-weight: 600; transition: all 0.15s;
+}
+.format-btn:hover { border-color: var(--accent); color: var(--accent); }
+.format-btn.selected { border-color: var(--accent); background: var(--accent-dim); color: var(--accent); }
+.format-btn .fb-ext { font-size: 20px; font-weight: 800; display: block; margin-bottom: 4px; }
+
+.convert-files-list { margin-bottom: 16px; }
+.convert-file-item {
+  display: flex; align-items: center; justify-content: space-between; padding: 10px 14px;
+  background: var(--bg3); border-radius: var(--radius-sm); border: 1px solid var(--border);
+  margin-bottom: 8px;
+}
+.cfi-name { font-size: 12px; font-family: var(--mono); color: var(--text2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 300px; }
+.cfi-status { font-size: 11px; font-weight: 600; font-family: var(--mono); }
+.cfi-status.pending { color: var(--text3); }
+.cfi-status.converting { color: var(--accent); }
+.cfi-status.done { color: var(--green); }
+.cfi-status.error { color: var(--red); }
+
+/* ── Logs view ── */
+.logs-content {
+  background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius);
+  padding: 16px; font-family: var(--mono); font-size: 11px; color: var(--text3);
+  height: 500px; overflow-y: auto; white-space: pre-wrap; line-height: 1.7;
+}
+
+/* ── Settings view ── */
+.settings-row { display: flex; align-items: center; justify-content: space-between; padding: 14px 0; border-bottom: 1px solid var(--border); }
+.settings-row:last-child { border-bottom: none; }
+.settings-row .sr-left {}
+.settings-row .sr-label { font-size: 13px; font-weight: 600; margin-bottom: 2px; }
+.settings-row .sr-desc { font-size: 11px; color: var(--text3); }
+.path-display { font-size: 11px; color: var(--accent); font-family: var(--mono); background: var(--bg3); padding: 6px 10px; border-radius: 6px; max-width: 300px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* ── Animations ── */
+@keyframes fadeIn { from{opacity:0;transform:translateY(6px)} to{opacity:1;transform:translateY(0)} }
+.animate-in { animation: fadeIn 0.2s ease forwards; }
+
+/* ── Notification toast ── */
+#toast {
+  position: fixed; bottom: 24px; right: 24px; z-index: 999;
+  background: var(--bg2); border: 1px solid var(--border2); border-radius: var(--radius-sm);
+  padding: 12px 16px; font-size: 13px; font-weight: 500; max-width: 320px;
+  transform: translateY(80px); opacity: 0; transition: all 0.3s cubic-bezier(0.34,1.56,0.64,1);
+  pointer-events: none;
+}
+#toast.show { transform: translateY(0); opacity: 1; }
+#toast.success { border-color: rgba(71,255,176,0.4); color: var(--green); }
+#toast.error { border-color: rgba(255,74,74,0.4); color: var(--red); }
+#toast.info { border-color: rgba(232,255,71,0.3); color: var(--accent); }
+
+/* ── Spinner ── */
+.spinner { width: 14px; height: 14px; border: 2px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin 0.7s linear infinite; display: inline-block; }
+@keyframes spin { to { transform: rotate(360deg); } }
+</style>
+</head>
+<body>
+
+<div id="app">
+  <!-- Titlebar -->
+  <div id="titlebar">
+    <div id="titlebar-logo">
+      <div class="logo-mark">R</div>
+      <div class="logo-text">RAV<span>downloader</span></div>
+    </div>
+    <div id="titlebar-controls">
+      <button class="tc-btn" onclick="api.minimize()" title="Minimize">&#8212;</button>
+      <button class="tc-btn" onclick="api.maximize()" title="Maximize">&#9633;</button>
+      <button class="tc-btn close" onclick="api.close()" title="Close">&#10005;</button>
+    </div>
+  </div>
+
+  <div id="main">
+    <!-- Sidebar -->
+    <div id="sidebar">
+      <div class="sidebar-section">
+        <div class="sidebar-label">Main</div>
+        <button class="nav-btn active" data-view="downloader" onclick="switchView(this)">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v14M5 9l7 7 7-7"/><path d="M2 20h20"/></svg>
+          Downloader
+        </button>
+        <button class="nav-btn" data-view="convert" onclick="switchView(this)">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M7 16V4m0 0L3 8m4-4l4 4M17 8v12m0 0l4-4m-4 4l-4-4"/></svg>
+          Convert
+        </button>
+      </div>
+      <div class="sidebar-section">
+        <div class="sidebar-label">Tools</div>
+        <button class="nav-btn" data-view="update" onclick="switchView(this)">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/><path d="M12 8v4l3 3"/></svg>
+          Update yt-dlp
+        </button>
+        <button class="nav-btn" onclick="openSitesModal()">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15 15 0 010 20M12 2a15 15 0 000 20"/></svg>
+          Supported Sites
+        </button>
+        <button class="nav-btn" data-view="logs" onclick="switchView(this)">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><line x1="10" y1="9" x2="8" y2="9"/></svg>
+          View Logs
+        </button>
+        <button class="nav-btn" data-view="settings" onclick="switchView(this)">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-2 2 2 2 0 01-2-2v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83 0 2 2 0 010-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 01-2-2 2 2 0 012-2h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 010-2.83 2 2 0 012.83 0l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 012-2 2 2 0 012 2v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 0 2 2 0 010 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 012 2 2 2 0 01-2 2h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
+          Settings
+        </button>
+      </div>
+      <div class="sidebar-bottom">
+        <div class="sidebar-divider"></div>
+        <div class="version-badge">
+          <div class="vb-label">yt-dlp version</div>
+          <div class="vb-value" id="sidebar-version">Loading...</div>
+        </div>
+        <div class="credit-tag">Developed by <span>Colin Christy</span></div>
+      </div>
+    </div>
+
+    <!-- Content -->
+    <div id="content">
+
+      <!-- ── DOWNLOADER VIEW ── -->
+      <div class="view active" id="view-downloader">
+        <div class="page-header">
+          <div class="page-title">Download <span>anything.</span></div>
+          <div class="page-subtitle">Paste a URL, pick your format, add to queue — done.</div>
+        </div>
+
+        <div class="card">
+          <div class="card-title">Add to Queue</div>
+          <div class="url-input-wrap">
+            <input type="text" id="url-input" placeholder="Paste video link here…" autocomplete="off" spellcheck="false"/>
+            <select class="type-select" id="type-select">
+              <option value="mp4">MP4</option>
+              <option value="mp3">MP3</option>
+            </select>
+            <button class="add-btn" id="main-action-btn" onclick="addToQueue()">+ Add to Queue</button>
+          </div>
+          <div class="options-row">
+            <label class="toggle-wrap">
+              <input type="checkbox" id="auto-download-toggle"/>
+              <div class="toggle"></div>
+              <span class="toggle-label">Auto Download (skip queue)</span>
+            </label>
+            <label class="toggle-wrap">
+              <input type="checkbox" id="playlist-toggle"/>
+              <div class="toggle"></div>
+              <span class="toggle-label">Playlist mode</span>
+            </label>
+            <div class="bandwidth-wrap">
+              <label class="toggle-wrap">
+                <input type="checkbox" id="bw-enable-toggle"/>
+                <div class="toggle"></div>
+                <span class="toggle-label">Limit bandwidth</span>
+              </label>
+              <input type="number" class="bw-input" id="bw-input" placeholder="2048" style="display:none"/>
+              <span class="bw-unit" id="bw-unit" style="display:none">KB/s</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="queue-header">
+            <div class="card-title" style="margin:0">Download Queue <span class="queue-count" id="queue-count">(0 items)</span></div>
+            <div class="queue-actions">
+              <button class="btn btn-primary" onclick="downloadAll()">⬇ Download All</button>
+              <button class="btn btn-ghost" onclick="retryFailed()">↺ Retry Failed</button>
+              <button class="btn btn-ghost" onclick="pauseAll()">⏸ Pause</button>
+              <button class="btn btn-danger" onclick="clearQueue()">✕ Clear</button>
+            </div>
+          </div>
+          <div id="queue-container"></div>
+        </div>
+
+        <div id="download-log-area"></div>
+      </div>
+
+      <!-- ── CONVERT VIEW ── -->
+      <div class="view" id="view-convert">
+        <div class="page-header">
+          <div class="page-title">Convert <span>files.</span></div>
+          <div class="page-subtitle">Convert images and video using bundled ffmpeg — no quality loss.</div>
+        </div>
+        <div class="card">
+          <div class="card-title">Target Format</div>
+          <div class="convert-format-row">
+            <div class="format-btn selected" id="fmt-png" onclick="selectConvertFormat('png')">
+              <span class="fb-ext">PNG</span>
+              <small style="color:var(--text3);font-size:11px">AVIF, HEIC, JPG, WEBP → PNG</small>
+            </div>
+            <div class="format-btn" id="fmt-mp4" onclick="selectConvertFormat('mp4')">
+              <span class="fb-ext">MP4</span>
+              <small style="color:var(--text3);font-size:11px">MOV, MKV, AVI, WEBM → MP4</small>
+            </div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-title">Files to Convert</div>
+          <div class="convert-drop-zone" onclick="pickConvertFiles()">
+            <div class="dz-icon">📂</div>
+            <p>Click to select files</p>
+            <span>Multi-select supported</span>
+          </div>
+          <div class="convert-files-list" id="convert-files-list"></div>
+          <button class="btn btn-primary" id="convert-start-btn" onclick="startConversion()" style="display:none;width:100%;padding:12px;font-size:14px">▶ Start Conversion</button>
+        </div>
+      </div>
+
+      <!-- ── UPDATE VIEW ── -->
+      <div class="view" id="view-update">
+        <div class="page-header">
+          <div class="page-title">Update <span>yt-dlp.</span></div>
+          <div class="page-subtitle">Keep yt-dlp up to date for the latest site support and bug fixes.</div>
+        </div>
+        <div class="card">
+          <div class="update-card">
+            <div class="uc-icon">⚡</div>
+            <div class="uc-info">
+              <div class="uc-name">yt-dlp</div>
+              <div class="uc-version" id="update-current-version">Checking…</div>
+            </div>
+            <button class="btn btn-primary" onclick="doUpdate()" id="update-btn">Check & Update</button>
+          </div>
+          <div style="display:flex;align-items:center;gap:10px;padding:12px 0;border-top:1px solid var(--border);margin-top:4px">
+            <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;color:var(--text2)">
+              <input type="checkbox" id="nightly-toggle" checked style="accent-color:var(--accent);width:14px;height:14px">
+              Use nightly builds <span style="font-size:11px;color:var(--text3);font-family:var(--mono)">(github.com/yt-dlp/yt-dlp-nightly-builds)</span>
+            </label>
+          </div>
+          <div class="update-log" id="update-log">Ready to update. Nightly builds have the latest fixes and site support.
+Click "Check &amp; Update" to begin.</div>
+        </div>
+      </div>
+
+      <!-- ── LOGS VIEW ── -->
+      <div class="view" id="view-logs">
+        <div class="page-header">
+          <div class="page-title">Activity <span>logs.</span></div>
+          <div class="page-subtitle">All download and conversion activity is recorded here.</div>
+        </div>
+        <div class="card">
+          <div style="display:flex;gap:10px;margin-bottom:12px;align-items:center">
+            <button class="btn btn-ghost" onclick="refreshLogs()">↺ Refresh</button>
+            <button class="btn btn-ghost" onclick="api.openLogFolder()">📁 Open Log Folder</button>
+            <span style="font-size:11px;color:var(--text3);font-family:var(--mono);margin-left:auto" id="log-path-label"></span>
+          </div>
+          <div class="logs-content" id="logs-content">Click Refresh to load logs…</div>
+        </div>
+      </div>
+
+      <!-- ── SETTINGS VIEW ── -->
+      <div class="view" id="view-settings">
+        <div class="page-header">
+          <div class="page-title">Settings</div>
+          <div class="page-subtitle">Configure RAVdownloader to your preferences.</div>
+        </div>
+        <div class="card">
+          <div class="settings-row">
+            <div class="sr-left">
+              <div class="sr-label">Download Folder</div>
+              <div class="sr-desc">Where all downloaded files are saved</div>
+              <div class="path-display" id="path-display" style="margin-top:6px">Not set (using Downloads)</div>
+            </div>
+            <div style="display:flex;gap:8px">
+              <button class="btn btn-ghost" onclick="chooseFolder()">Choose Path</button>
+              <button class="btn btn-ghost" onclick="api.openFolder()">Open Folder</button>
+            </div>
+          </div>
+          <div class="settings-row">
+            <div class="sr-left">
+              <div class="sr-label">yt-dlp Version</div>
+              <div class="sr-desc">Currently installed version</div>
+            </div>
+            <span style="font-size:13px;color:var(--accent);font-family:var(--mono)" id="settings-version">Loading...</span>
+          </div>
+          <div class="settings-row">
+            <div class="sr-left">
+              <div class="sr-label">About</div>
+              <div class="sr-desc">RAVdownloader by Colin Christy — Internal tool</div>
+            </div>
+            <span style="font-size:12px;color:var(--text3);font-family:var(--mono)">v2.0.0</span>
+          </div>
+          <div class="settings-row">
+            <div class="sr-left">
+              <div class="sr-label">Diagnostics</div>
+              <div class="sr-desc">Check binary paths — use this if yt-dlp shows "not found"</div>
+            </div>
+            <button class="btn btn-ghost" onclick="runDiagnostics()">Run Diagnostics</button>
+          </div>
+          <div id="diag-output" style="display:none;background:var(--bg1);border:1px solid var(--border);border-radius:8px;padding:14px;font-family:var(--mono);font-size:11px;color:var(--text2);line-height:1.9;white-space:pre-wrap;margin-top:4px"></div>
+        </div>
+      </div>
+
+    </div><!-- /content -->
+  </div><!-- /main -->
+</div><!-- /app -->
+
+<!-- ── QUALITY PICKER MODAL ── -->
+<div class="modal-overlay" id="quality-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title">Select Quality</div>
+      <button class="modal-close" onclick="closeModal('quality-modal')">✕</button>
+    </div>
+    <div id="quality-modal-title" style="font-size:12px;color:var(--text3);margin-bottom:16px;font-family:var(--mono);overflow:hidden;text-overflow:ellipsis;white-space:nowrap"></div>
+    <div style="font-size:12px;color:var(--text3);margin-bottom:12px">H.264 + AAC — Premiere compatible</div>
+    <div class="quality-list" id="quality-list"></div>
+    <div id="quality-loading" style="text-align:center;padding:32px;display:none">
+      <div class="spinner"></div>
+      <div style="color:var(--text3);font-size:13px;margin-top:12px">Fetching available qualities…</div>
+    </div>
+  </div>
+</div>
+
+<!-- ── SUPPORTED SITES MODAL ── -->
+<div class="modal-overlay" id="sites-modal">
+  <div class="modal" style="width:520px">
+    <div class="modal-header">
+      <div class="modal-title">Supported Sites</div>
+      <button class="modal-close" onclick="closeModal('sites-modal')">✕</button>
+    </div>
+    <input type="text" class="sites-search" id="sites-search" placeholder="Search sites…" oninput="filterSites()"/>
+    <div id="sites-count" style="font-size:11px;color:var(--text3);margin-bottom:8px;font-family:var(--mono)"></div>
+    <div class="sites-list" id="sites-list">
+      <div style="text-align:center;padding:32px"><div class="spinner"></div><div style="color:var(--text3);font-size:13px;margin-top:12px">Loading extractors…</div></div>
+    </div>
+  </div>
+</div>
+
+<!-- ── TOAST ── -->
+<div id="toast"></div>
+
+<script>
+// ──────────────────────────────────────────────────────────────
+// State
+// ──────────────────────────────────────────────────────────────
+let queue = [];
+let nextId = 1;
+let currentDownloadId = null;
+let isPaused = false;
+let allSites = [];
+let convertFiles = [];
+let selectedConvertFormat = 'png';
+let settings = {};
+
+// ──────────────────────────────────────────────────────────────
+// Init
+// ──────────────────────────────────────────────────────────────
+async function init() {
+  settings = await api.getSettings();
+  updatePathDisplay(settings.downloadPath);
+  const v = await api.getVersion();
+  document.getElementById('sidebar-version').textContent = v;
+  document.getElementById('settings-version').textContent = v;
+  document.getElementById('update-current-version').textContent = v;
+
+  api.onProgress(({ id, line }) => handleProgress(id, line));
+  api.onUpdateProgress(msg => {
+    const el = document.getElementById('update-log');
+    if (el) el.textContent += '\n' + msg;
+  });
+
+  // Auto-download toggle → swap button appearance
+  document.getElementById('auto-download-toggle').addEventListener('change', function() {
+    const btn = document.getElementById('main-action-btn');
+    if (this.checked) {
+      btn.classList.add('download-mode');
+      btn.textContent = '⬇ Download Now';
+    } else {
+      btn.classList.remove('download-mode');
+      btn.textContent = '+ Add to Queue';
+    }
+  });
+
+  // Bandwidth toggle
+  document.getElementById('bw-enable-toggle').addEventListener('change', function() {
+    document.getElementById('bw-input').style.display = this.checked ? '' : 'none';
+    document.getElementById('bw-unit').style.display = this.checked ? '' : 'none';
+  });
+}
+init();
+
+// ──────────────────────────────────────────────────────────────
+// Navigation
+// ──────────────────────────────────────────────────────────────
+function switchView(btn) {
+  document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+  btn.classList.add('active');
+  const viewId = 'view-' + btn.dataset.view;
+  const view = document.getElementById(viewId);
+  if (view) { view.classList.add('active'); view.classList.remove('animate-in'); void view.offsetWidth; view.classList.add('animate-in'); }
+  if (btn.dataset.view === 'logs') refreshLogs();
+  if (btn.dataset.view === 'settings') { api.getVersion().then(v => { document.getElementById('settings-version').textContent = v; }); }
+}
+
+// ──────────────────────────────────────────────────────────────
+// Toast
+// ──────────────────────────────────────────────────────────────
+let toastTimeout;
+function showToast(msg, type = 'info') {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = `show ${type}`;
+  clearTimeout(toastTimeout);
+  toastTimeout = setTimeout(() => { t.className = ''; }, 3200);
+}
+
+// ──────────────────────────────────────────────────────────────
+// Queue
+// ──────────────────────────────────────────────────────────────
+async function addToQueue() {
+  const url = document.getElementById('url-input').value.trim();
+  if (!url) { showToast('Please enter a URL', 'error'); return; }
+  if (!url.startsWith('http')) { showToast('Invalid URL — must start with http', 'error'); return; }
+
+  const isPlaylist = document.getElementById('playlist-toggle').checked;
+  if (!isPlaylist && (url.includes('/playlist?') || url.includes('&list='))) {
+    if (!confirm('This looks like a playlist URL. Playlist mode is disabled. Download first video only?')) return;
+  }
+
+  const type = document.getElementById('type-select').value;
+  const id = nextId++;
+  const item = { id, url, type, status: 'queued', progress: 0, logs: [] };
+  queue.push(item);
+  document.getElementById('url-input').value = '';
+  renderQueue();
+  showToast('Added to queue', 'info');
+
+  if (document.getElementById('auto-download-toggle').checked) {
+    await downloadItem(id);
+  }
+}
+
+function renderQueue() {
+  const container = document.getElementById('queue-container');
+  document.getElementById('queue-count').textContent = `(${queue.length} item${queue.length !== 1 ? 's' : ''})`;
+
+  if (queue.length === 0) {
+    container.innerHTML = `<div class="queue-empty"><div class="qe-icon">📭</div><p>No items in queue. Paste a URL above to get started.</p></div>`;
+    return;
+  }
+
+  let html = `<table class="queue-table"><thead><tr><th class="td-index">#</th><th>URL</th><th class="td-type">Type</th><th class="td-status">Status</th><th class="td-actions">Actions</th></tr></thead><tbody>`;
+  queue.forEach((item, i) => {
+    const statusDot = item.status === 'downloading' ? 'pulse' : '';
+    const actionBtns = item.status !== 'downloading'
+      ? `<button class="row-download-btn" onclick="downloadItem(${item.id})">Download</button> <button class="row-remove-btn" onclick="removeItem(${item.id})" title="Remove">✕</button>`
+      : `<button class="row-download-btn" style="background:rgba(255,170,71,0.15);color:var(--orange);border-color:rgba(255,170,71,0.3)" onclick="pauseDownload(${item.id})">Pause</button>`;
+
+    html += `<tr id="row-${item.id}">
+      <td class="td-index">${i + 1}</td>
+      <td class="td-url" title="${item.url}">${item.url}</td>
+      <td class="td-type"><span class="type-tag ${item.type}">${item.type.toUpperCase()}</span></td>
+      <td class="td-status">
+        <span class="status-tag ${item.status}">
+          <span class="status-dot ${statusDot}"></span>${capitalize(item.status)}
+        </span>
+        ${item.status === 'downloading' ? `
+          <div class="progress-bar-wrap" style="margin-top:5px">
+            <div class="progress-bar-fill" id="pb-${item.id}" style="width:${item.progress || 0}%"></div>
+          </div>
+          <div id="pt-${item.id}" style="font-size:10px;color:var(--text3);font-family:var(--mono);margin-top:3px">${item.progressText || 'Starting…'}</div>
+        ` : ''}
+        ${item.status === 'error' && item.logLines ? `<div style="font-size:10px;color:var(--red);font-family:var(--mono);margin-top:3px;max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${(item.logLines.slice(-1)[0]||'').replace(/"/g,"'")}">⚠ ${(item.logLines.slice(-1)[0]||'Download failed').slice(0,80)}</div>` : ''}
+      </td>
+      <td class="td-actions">${actionBtns}</td>
+    </tr>`;
+  });
+  html += `</tbody></table>`;
+  container.innerHTML = html;
+}
+
+function updateItemStatus(id, status, progress) {
+  const item = queue.find(i => i.id === id);
+  if (!item) return;
+  item.status = status;
+  if (progress !== undefined) item.progress = progress;
+  renderQueue();
+}
+
+function removeItem(id) {
+  queue = queue.filter(i => i.id !== id);
+  renderQueue();
+}
+
+function clearQueue() {
+  if (queue.some(i => i.status === 'downloading')) {
+    if (!confirm('A download is in progress. Clear anyway?')) return;
+    if (currentDownloadId) api.pauseDownload(currentDownloadId);
+  }
+  queue = [];
+  renderQueue();
+}
+
+function retryFailed() {
+  const failed = queue.filter(i => i.status === 'error');
+  if (!failed.length) { showToast('No failed downloads to retry', 'info'); return; }
+  failed.forEach(i => { i.status = 'queued'; i.progress = 0; });
+  renderQueue();
+  downloadAll();
+}
+
+async function pauseAll() {
+  if (currentDownloadId) {
+    await api.pauseDownload(currentDownloadId);
+    updateItemStatus(currentDownloadId, 'paused');
+    currentDownloadId = null;
+    isPaused = true;
+    showToast('Download paused', 'info');
+  }
+}
+
+async function pauseDownload(id) {
+  await api.pauseDownload(id);
+  updateItemStatus(id, 'paused');
+  if (currentDownloadId === id) currentDownloadId = null;
+  showToast('Download paused', 'info');
+}
+
+async function downloadAll() {
+  const queued = queue.filter(i => i.status === 'queued' || i.status === 'paused');
+  for (const item of queued) {
+    await downloadItem(item.id);
+  }
+}
+
+async function downloadItem(id) {
+  const item = queue.find(i => i.id === id);
+  if (!item) return;
+
+  let formatId = null;
+
+  if (item.type === 'mp4') {
+    // Show quality picker
+    formatId = await showQualityPicker(item.url);
+    if (!formatId) return; // user cancelled
+  }
+
+  const bwEnabled = document.getElementById('bw-enable-toggle').checked;
+  const bwVal = document.getElementById('bw-input').value;
+  const bandwidth = bwEnabled && bwVal ? parseInt(bwVal) : null;
+
+  updateItemStatus(id, 'downloading', 0);
+  currentDownloadId = id;
+
+  const result = await api.startDownload({ id, url: item.url, type: item.type, formatId, bandwidth });
+
+  if (result.success) {
+    updateItemStatus(id, 'done', 100);
+    showToast('Download complete! ✓', 'success');
+  } else {
+    updateItemStatus(id, 'error');
+    showToast('Download failed — check logs', 'error');
+  }
+  currentDownloadId = null;
+}
+
+// ──────────────────────────────────────────────────────────────
+// Quality Picker
+// ──────────────────────────────────────────────────────────────
+let qualityResolve = null;
+
+async function showQualityPicker(url) {
+  return new Promise(async (resolve) => {
+    qualityResolve = resolve;
+    openModal('quality-modal');
+
+    document.getElementById('quality-modal-title').textContent = url;
+    document.getElementById('quality-list').innerHTML = '';
+    document.getElementById('quality-loading').style.display = 'block';
+
+    const result = await api.getFormats(url);
+    document.getElementById('quality-loading').style.display = 'none';
+
+    if (result.error) {
+      document.getElementById('quality-list').innerHTML = `
+        <div style="text-align:center;padding:20px;color:var(--red)">
+          <div style="font-size:14px;margin-bottom:8px">⚠ Could not fetch formats</div>
+          <div style="font-size:11px;color:var(--text3);font-family:var(--mono)">${result.error}</div>
+          <div style="margin-top:16px;font-size:12px;color:var(--text2)">Falling back to BEST (Auto)</div>
+        </div>`;
+      // Auto-select best after 1.5s
+      setTimeout(() => {
+        closeModal('quality-modal');
+        resolve('bestvideo[vcodec^=avc1]+bestaudio[acodec^=mp4a]/bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]');
+      }, 1500);
+      return;
+    }
+
+    if (result.title) document.getElementById('quality-modal-title').textContent = result.title;
+
+    const list = document.getElementById('quality-list');
+    result.qualities.forEach((q, i) => {
+      const isAuto = q.resolution === 'best';
+      const div = document.createElement('div');
+      div.className = `quality-item ${isAuto ? 'best' : ''}`;
+      div.innerHTML = `
+        <div>
+          <div class="quality-label">${q.label}</div>
+          <div class="quality-meta">${isAuto ? 'Best available H.264 + AAC' : `H.264 + AAC · MP4${q.fps ? ` · ${q.fps}fps` : ''}`}</div>
+        </div>
+        <span class="quality-badge ${isAuto ? 'best-badge' : 'res-badge'}">${isAuto ? '⭐ BEST' : q.label}</span>`;
+      div.onclick = () => {
+        const fid = q.formatId;
+        qualityResolve = null; // clear before close so closeModal doesn't null-resolve
+        closeModal('quality-modal', true);
+        resolve(fid);
+      };
+      list.appendChild(div);
+    });
+  });
+}
+
+// ──────────────────────────────────────────────────────────────
+// Progress handling
+// ──────────────────────────────────────────────────────────────
+function handleProgress(id, line) {
+  const item = queue.find(i => i.id === id);
+  if (!item) return;
+
+  // Store last few lines of output
+  if (!item.logLines) item.logLines = [];
+  item.logLines.push(line);
+  if (item.logLines.length > 200) item.logLines.shift();
+
+  // Parse progress: "[download]  45.2% of ~123.45MiB at 2.34MiB/s ETA 00:12"
+  const pctMatch = line.match(/(\d+\.?\d*)%/);
+  if (pctMatch) {
+    const pct = parseFloat(pctMatch[1]);
+    item.progress = pct;
+
+    // Extract speed and ETA
+    const speedMatch = line.match(/at\s+([\d.]+\s*[KMG]iB\/s)/i);
+    const etaMatch   = line.match(/ETA\s+([\d:]+)/i);
+    const sizeMatch  = line.match(/of\s+~?([\d.]+\s*[KMG]iB)/i);
+
+    item.progressText = [
+      `${pct.toFixed(1)}%`,
+      sizeMatch  ? sizeMatch[1]  : '',
+      speedMatch ? speedMatch[1] : '',
+      etaMatch   ? `ETA ${etaMatch[1]}` : '',
+    ].filter(Boolean).join('  ·  ');
+
+    // Update progress bar
+    const pb = document.getElementById(`pb-${id}`);
+    if (pb) pb.style.width = Math.min(pct, 100) + '%';
+
+    // Update progress text
+    const pt = document.getElementById(`pt-${id}`);
+    if (pt) pt.textContent = item.progressText;
+  }
+
+  // Detect merge/post-processing
+  if (line.includes('[Merger]') || line.includes('[ffmpeg]') || line.includes('Merging')) {
+    item.progressText = 'Merging video + audio…';
+    const pt = document.getElementById(`pt-${id}`);
+    if (pt) pt.textContent = item.progressText;
+    const pb = document.getElementById(`pb-${id}`);
+    if (pb) { pb.style.width = '99%'; pb.style.background = 'var(--orange)'; }
+  }
+}
+
+// ──────────────────────────────────────────────────────────────
+// Modals
+// ──────────────────────────────────────────────────────────────
+function openModal(id) { document.getElementById(id).classList.add('open'); }
+function closeModal(id, fromQualitySelect = false) {
+  document.getElementById(id).classList.remove('open');
+  // Only cancel the promise if user dismissed WITHOUT selecting (not when they picked a quality)
+  if (id === 'quality-modal' && qualityResolve && !fromQualitySelect) {
+    qualityResolve(null);
+    qualityResolve = null;
+  }
+}
+// Close on overlay click (this is a cancel)
+document.querySelectorAll('.modal-overlay').forEach(el => {
+  el.addEventListener('click', (e) => { if (e.target === el) closeModal(el.id, false); });
+});
+
+// ──────────────────────────────────────────────────────────────
+// Supported Sites
+// ──────────────────────────────────────────────────────────────
+async function openSitesModal() {
+  openModal('sites-modal');
+  if (allSites.length) { renderSites(allSites); return; }
+  const result = await api.getSupportedSites();
+  if (result.sites) { allSites = result.sites; renderSites(allSites); }
+  else { document.getElementById('sites-list').innerHTML = `<div style="color:var(--red);padding:12px">${result.error}</div>`; }
+}
+
+function renderSites(sites) {
+  document.getElementById('sites-count').textContent = `${sites.length} extractors`;
+  document.getElementById('sites-list').innerHTML = sites.map(s => `<div class="site-item">${s}</div>`).join('');
+}
+
+function filterSites() {
+  const q = document.getElementById('sites-search').value.toLowerCase();
+  const filtered = allSites.filter(s => s.toLowerCase().includes(q));
+  renderSites(filtered);
+}
+
+// ──────────────────────────────────────────────────────────────
+// Update
+// ──────────────────────────────────────────────────────────────
+async function doUpdate() {
+  const btn = document.getElementById('update-btn');
+  btn.disabled = true;
+  btn.textContent = 'Updating…';
+  document.getElementById('update-log').textContent = 'Starting update…';
+  const useNightly = document.getElementById('nightly-toggle')?.checked !== false;
+  const result = await api.updateYtdlp(useNightly);
+  if (result.success) {
+    document.getElementById('update-current-version').textContent = result.version;
+    document.getElementById('sidebar-version').textContent = result.version;
+    document.getElementById('settings-version').textContent = result.version;
+    showToast(`Updated to ${result.version} ✓`, 'success');
+  } else {
+    document.getElementById('update-log').textContent += '\n❌ Update failed: ' + result.error;
+    showToast('Update failed — check logs', 'error');
+  }
+  btn.disabled = false;
+  btn.textContent = 'Check & Update';
+}
+
+// ──────────────────────────────────────────────────────────────
+// Logs
+// ──────────────────────────────────────────────────────────────
+async function refreshLogs() {
+  const el = document.getElementById('logs-content');
+  el.textContent = 'Loading…';
+  try {
+    const logs = await api.getLogs();
+    el.textContent = logs || '(No logs yet)';
+    el.scrollTop = el.scrollHeight;
+  } catch(e) {
+    el.textContent = 'Error loading logs: ' + e.message;
+  }
+}
+
+// ──────────────────────────────────────────────────────────────
+// Settings / Folder
+// ──────────────────────────────────────────────────────────────
+async function chooseFolder() {
+  const p = await api.chooseFolder();
+  if (p) { updatePathDisplay(p); settings.downloadPath = p; showToast('Download folder updated ✓', 'success'); }
+}
+function updatePathDisplay(p) {
+  document.getElementById('path-display').textContent = p || 'Not set (using Downloads)';
+}
+
+// ──────────────────────────────────────────────────────────────
+// Convert
+// ──────────────────────────────────────────────────────────────
+function selectConvertFormat(fmt) {
+  selectedConvertFormat = fmt;
+  document.getElementById('fmt-png').classList.toggle('selected', fmt === 'png');
+  document.getElementById('fmt-mp4').classList.toggle('selected', fmt === 'mp4');
+}
+
+async function pickConvertFiles() {
+  const imageFilters = [{ name: 'Images', extensions: ['avif','heic','jpg','jpeg','png','webp','tiff','bmp'] }];
+  const videoFilters = [{ name: 'Videos', extensions: ['mov','mkv','avi','webm','mp4','m4v','flv','wmv'] }];
+  const filters = selectedConvertFormat === 'png' ? imageFilters : videoFilters;
+  const files = await api.chooseFiles({ title: 'Select Files to Convert', filters });
+  if (files.length) {
+    convertFiles = files.map(f => ({ path: f, status: 'pending' }));
+    renderConvertFiles();
+    document.getElementById('convert-start-btn').style.display = '';
+  }
+}
+
+function renderConvertFiles() {
+  const el = document.getElementById('convert-files-list');
+  el.innerHTML = convertFiles.map((f, i) => {
+    const name = f.path.split(/[/\\]/).pop();
+    return `<div class="convert-file-item"><span class="cfi-name" title="${f.path}">${name}</span><span class="cfi-status ${f.status}" id="cfi-${i}">${capitalize(f.status)}</span></div>`;
+  }).join('');
+}
+
+async function startConversion() {
+  const dl = settings.downloadPath || null;
+  for (let i = 0; i < convertFiles.length; i++) {
+    const f = convertFiles[i];
+    f.status = 'converting';
+    const statusEl = document.getElementById(`cfi-${i}`);
+    if (statusEl) { statusEl.textContent = 'Converting…'; statusEl.className = 'cfi-status converting'; }
+    const outputDir = dl || f.path.substring(0, f.path.lastIndexOf('\\') || f.path.lastIndexOf('/'));
+    const result = await api.convertFile({ inputPath: f.path, outputFormat: selectedConvertFormat, outputDir });
+    f.status = result.success ? 'done' : 'error';
+    if (statusEl) {
+      statusEl.textContent = result.success ? '✓ Done' : '✗ Error';
+      statusEl.className = `cfi-status ${f.status}`;
+    }
+    if (result.success) showToast(`Converted: ${f.path.split(/[/\\]/).pop()}`, 'success');
+    else showToast(`Failed: ${result.error?.slice(0,60)}`, 'error');
+  }
+}
+
+// ──────────────────────────────────────────────────────────────
+// Helpers
+// ──────────────────────────────────────────────────────────────
+function capitalize(s) { return s.charAt(0).toUpperCase() + s.slice(1); }
+
+// Enter key on URL input
+document.getElementById('url-input').addEventListener('keydown', e => {
+  if (e.key === 'Enter') addToQueue();
+});
+
+// ── Diagnostics ──────────────────────────────────────────────
+async function runDiagnostics() {
+  const out = document.getElementById('diag-output');
+  out.style.display = 'block';
+  out.textContent = 'Running diagnostics...';
+  try {
+    const d = await api.getDiagnostics();
+    const lines = [
+      '=== RAVdownloader v2.0 Diagnostics ===',
+      '',
+      'MODE: ' + (d.isDev ? 'Development (npm start)' : 'Packaged'),
+      'CWD:  ' + d.cwd,
+      'APP:  ' + d.appPath,
+      '',
+      'RESOLVED BIN DIR: ' + d.binDir,
+      '',
+      'yt-dlp.exe:',
+      '  Path:   ' + d.ytdlpPath,
+      '  Exists: ' + d.ytdlpExists,
+      '  Valid:  ' + d.ytdlpOk + (d.ytdlpOk ? '' : '  ← TOO SMALL — WRONG DOWNLOAD!'),
+      '  Size:   ' + (d.ytdlpSize ? (d.ytdlpSize/1024/1024).toFixed(2) + ' MB (should be ~10-15 MB)' : 'N/A'),
+      '  Version:' + d.version,
+      '',
+      'ffmpeg.exe:',
+      '  Path:   ' + d.ffmpegPath,
+      '  Exists: ' + d.ffmpegExists,
+      '  Valid:  ' + d.ffmpegOk + (d.ffmpegOk ? '' : '  ← TOO SMALL — WRONG DOWNLOAD!'),
+      '  Size:   ' + (d.ffmpegSize ? (d.ffmpegSize/1024/1024).toFixed(2) + ' MB' : 'N/A'),
+      '',
+      '--- PATHS SEARCHED ---',
+      ...(d.candidates || []).map(c =>
+        (c.hasYtdlp ? '  ✓' : '  ✗') + ' ' + c.path +
+        (c.hasYtdlp ? ' (yt-dlp ✓)' : ' (yt-dlp ✗)') +
+        (c.hasFfmpeg ? ' (ffmpeg ✓)' : ' (ffmpeg ✗)')
+      ),
+      '',
+      d.ytdlpOk && d.ffmpegOk
+        ? '✓ All binaries found and valid!'
+        : '✗ Missing binaries. Place yt-dlp.exe + ffmpeg.exe in: ' + d.binDir,
+    ];
+    out.textContent = lines.join('\n');
+  } catch(e) {
+    out.textContent = 'Diagnostics error: ' + e.message;
+  }
+}
+</script>
+</body>
+</html>

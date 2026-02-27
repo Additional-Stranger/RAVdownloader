@@ -1,0 +1,3 @@
+Place the following files in this directory:
+- yt-dlp.exe  (download from https://github.com/yt-dlp/yt-dlp/releases/latest)
+- ffmpeg.exe  (download from https://www.gyan.dev/ffmpeg/builds/)
