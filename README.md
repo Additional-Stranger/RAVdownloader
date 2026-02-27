@@ -3,7 +3,7 @@ Windows 64x Only Currently
 
 # EXE Install file:
 Go To My Website
-ColinChristy.cc
+https://ColinChristy.cc
 (No pre-requisites needed, easy install)
 
 ## Complete Setup & Build Guide 
