@@ -29,13 +29,33 @@ contextBridge.exposeInMainWorld('api', {
   },
 
   // yt-dlp
-  getVersion:       ()    => ipcRenderer.invoke('get-ytdlp-version'),
-  updateYtdlp:      (nightly) => ipcRenderer.invoke('update-ytdlp', nightly !== false),
-  getSupportedSites:()    => ipcRenderer.invoke('get-supported-sites'),
+  getVersion:         ()    => ipcRenderer.invoke('get-ytdlp-version'),
+  checkYtdlpUpdate:   ()    => ipcRenderer.invoke('check-ytdlp-update'),
+  updateYtdlp:        (nightly) => ipcRenderer.invoke('update-ytdlp', nightly !== false),
+  getSupportedSites:  ()    => ipcRenderer.invoke('get-supported-sites'),
+  onYtdlpDownloadProgress: (cb) => {
+    ipcRenderer.removeAllListeners('ytdlp-download-progress');
+    ipcRenderer.on('ytdlp-download-progress', (_e, d) => cb(d));
+  },
+
+  // App version & self-update
+  getAppVersion:     ()    => ipcRenderer.invoke('get-app-version'),
+  checkAppUpdate:    ()    => ipcRenderer.invoke('check-app-update'),
+  downloadAppUpdate: (url) => ipcRenderer.invoke('download-app-update', url),
+  onAppUpdateProgress: (cb) => {
+    ipcRenderer.removeAllListeners('app-update-progress');
+    ipcRenderer.on('app-update-progress', (_e, pct) => cb(pct));
+  },
 
   // Files & convert
   chooseFiles:  (opts)  => ipcRenderer.invoke('choose-files', opts),
   convertFile:  (opts)  => ipcRenderer.invoke('convert-file', opts),
+
+  // YouTube account
+  youtubeLogin:        ()  => ipcRenderer.invoke('youtube-login'),
+  youtubeLogout:       ()  => ipcRenderer.invoke('youtube-logout'),
+  youtubeAuthStatus:   ()  => ipcRenderer.invoke('youtube-auth-status'),
+  youtubeRefreshEmail: ()  => ipcRenderer.invoke('youtube-refresh-email'),
 
   // Logs & diagnostics
   getLogs:        () => ipcRenderer.invoke('get-logs'),

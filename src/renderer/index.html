@@ -410,6 +410,112 @@ html, body { height: 100%; overflow: hidden; background: var(--bg); color: var(-
 /* ── Spinner ── */
 .spinner { width: 14px; height: 14px; border: 2px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin 0.7s linear infinite; display: inline-block; }
 @keyframes spin { to { transform: rotate(360deg); } }
+
+/* ── YouTube Auth ── */
+.auth-status { font-size: 11px; font-family: var(--mono); padding: 4px 10px; border-radius: 20px; }
+.auth-status.logged-in { background: rgba(71,255,176,0.1); color: var(--green); }
+.auth-status.not-logged { background: rgba(255,255,255,0.05); color: var(--text3); }
+.warning-banner { display: flex; align-items: flex-start; gap: 10px; padding: 12px 16px; border-radius: var(--radius-sm); background: rgba(255,74,74,0.08); border: 1px solid rgba(255,74,74,0.25); margin-top: 12px; }
+.warning-banner .wb-icon { font-size: 16px; flex-shrink: 0; margin-top: 1px; }
+.warning-banner .wb-text { font-size: 12px; color: var(--red); line-height: 1.5; }
+.warning-banner .wb-text strong { color: #ff6b6b; }
+
+/* ── Welcome Modal ── */
+.welcome-overlay {
+  position: fixed; inset: 0; background: rgba(0,0,0,0.85); z-index: 200;
+  display: flex; align-items: center; justify-content: center;
+  backdrop-filter: blur(8px); opacity: 0; pointer-events: none;
+  transition: opacity 0.3s;
+}
+.welcome-overlay.open { opacity: 1; pointer-events: all; }
+.welcome-modal {
+  background: var(--bg2); border: 1px solid var(--border2); border-radius: 20px;
+  padding: 36px 32px; width: 500px; max-width: 90vw; text-align: center;
+  transform: scale(0.92) translateY(12px); transition: transform 0.3s cubic-bezier(0.34,1.56,0.64,1);
+}
+.welcome-overlay.open .welcome-modal { transform: scale(1) translateY(0); }
+.welcome-logo { width: 52px; height: 52px; background: var(--accent); border-radius: 14px; display: inline-flex; align-items: center; justify-content: center; font-size: 24px; font-weight: 800; color: #000; margin-bottom: 16px; }
+.welcome-title { font-size: 22px; font-weight: 800; letter-spacing: -0.02em; margin-bottom: 4px; }
+.welcome-title span { color: var(--accent); }
+.welcome-subtitle { font-size: 13px; color: var(--text2); margin-bottom: 24px; line-height: 1.5; }
+
+/* Steps */
+.welcome-step {
+  text-align: left; margin-bottom: 16px; padding: 14px 16px;
+  background: var(--bg3); border: 1px solid var(--border); border-radius: var(--radius-sm);
+}
+.welcome-step-header { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+.welcome-step-num {
+  width: 22px; height: 22px; border-radius: 50%; background: var(--accent); color: #000;
+  font-size: 11px; font-weight: 800; display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+}
+.welcome-step-title { font-size: 13px; font-weight: 700; }
+.welcome-step-desc { font-size: 12px; color: var(--text2); line-height: 1.4; margin-bottom: 10px; }
+.welcome-step-content { display: flex; align-items: center; gap: 10px; }
+
+.welcome-folder-path {
+  flex: 1; font-size: 11px; color: var(--accent); font-family: var(--mono);
+  background: var(--bg); padding: 8px 12px; border-radius: 6px;
+  border: 1px solid var(--border); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+
+.welcome-bug-box {
+  background: var(--bg3); border: 1px solid var(--border); border-radius: var(--radius-sm);
+  padding: 12px 14px; display: flex; align-items: center; gap: 10px; margin-top: 16px;
+}
+.welcome-bug-box .wbb-icon { font-size: 18px; flex-shrink: 0; }
+.welcome-bug-box .wbb-text { font-size: 12px; color: var(--text2); line-height: 1.4; }
+.welcome-bug-box .wbb-text a { color: var(--accent); text-decoration: none; font-family: var(--mono); font-size: 11px; }
+.welcome-bug-box .wbb-text a:hover { text-decoration: underline; }
+.welcome-go-btn {
+  width: 100%; padding: 14px; border: none; border-radius: var(--radius);
+  background: var(--accent); color: #000; font-family: var(--font);
+  font-size: 15px; font-weight: 700; cursor: pointer; transition: all 0.15s;
+  letter-spacing: 0.02em; margin-top: 16px;
+}
+.welcome-go-btn:hover { background: var(--accent2); transform: translateY(-1px); }
+
+/* ── Update Available Popup ── */
+.update-popup-overlay {
+  position: fixed; inset: 0; background: rgba(0,0,0,0.75); z-index: 150;
+  display: flex; align-items: center; justify-content: center;
+  backdrop-filter: blur(4px); opacity: 0; pointer-events: none;
+  transition: opacity 0.25s;
+}
+.update-popup-overlay.open { opacity: 1; pointer-events: all; }
+.update-popup {
+  background: var(--bg2); border: 1px solid var(--border2); border-radius: 16px;
+  padding: 32px; width: 420px; max-width: 90vw; text-align: center;
+  transform: scale(0.95) translateY(8px); transition: transform 0.25s cubic-bezier(0.34,1.56,0.64,1);
+}
+.update-popup-overlay.open .update-popup { transform: scale(1) translateY(0); }
+.update-popup .up-icon { font-size: 36px; margin-bottom: 16px; }
+.update-popup .up-title { font-size: 18px; font-weight: 800; margin-bottom: 6px; }
+.update-popup .up-desc { font-size: 13px; color: var(--text2); margin-bottom: 6px; line-height: 1.5; }
+.update-popup .up-version { font-size: 12px; font-family: var(--mono); color: var(--accent); margin-bottom: 20px; }
+.update-popup .up-btns { display: flex; gap: 10px; }
+.update-popup .up-btns button { flex: 1; padding: 12px; border-radius: var(--radius-sm); border: none; font-family: var(--font); font-size: 14px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
+
+/* ── Welcome Google Auth ── */
+.welcome-auth-status { font-size: 11px; font-family: var(--mono); padding: 4px 10px; border-radius: 20px; }
+.welcome-auth-status.logged-in { background: rgba(71,255,176,0.1); color: var(--green); }
+.welcome-auth-status.not-logged { background: rgba(255,255,255,0.05); color: var(--text3); }
+.welcome-warn-text { font-size: 10px; color: var(--red); line-height: 1.4; margin-top: 8px; }
+.welcome-warn-text strong { color: #ff6b6b; }
+
+/* ── App Update Popup ── */
+.app-update-overlay {
+  position: fixed; inset: 0; background: rgba(0,0,0,0.75); z-index: 160;
+  display: flex; align-items: center; justify-content: center;
+  backdrop-filter: blur(4px); opacity: 0; pointer-events: none; transition: opacity 0.25s;
+}
+.app-update-overlay.open { opacity: 1; pointer-events: all; }
+.app-update-popup {
+  background: var(--bg2); border: 1px solid var(--border2); border-radius: 16px;
+  padding: 32px; width: 440px; max-width: 90vw; text-align: center;
+  transform: scale(0.95) translateY(8px); transition: transform 0.25s cubic-bezier(0.34,1.56,0.64,1);
+}
+.app-update-overlay.open .app-update-popup { transform: scale(1) translateY(0); }
 </style>
 </head>
 <body>
@@ -468,6 +574,7 @@ html, body { height: 100%; overflow: hidden; background: var(--bg); color: var(-
           <div class="vb-value" id="sidebar-version">Loading...</div>
         </div>
         <div class="credit-tag">Developed by <span>Colin Christy</span></div>
+        <div class="credit-tag" style="margin-top:0;opacity:0.6" id="sidebar-app-version">v2.1.0</div>
       </div>
     </div>
 
@@ -519,7 +626,7 @@ html, body { height: 100%; overflow: hidden; background: var(--bg); color: var(-
             <div class="card-title" style="margin:0">Download Queue <span class="queue-count" id="queue-count">(0 items)</span></div>
             <div class="queue-actions">
               <button class="btn btn-primary" onclick="downloadAll()">⬇ Download All</button>
-              <button class="btn btn-ghost" onclick="retryFailed()">↺ Retry Failed</button>
+              <button class="btn btn-ghost" onclick="retryFailed()">Retry</button>
               <button class="btn btn-ghost" onclick="pauseAll()">⏸ Pause</button>
               <button class="btn btn-danger" onclick="clearQueue()">✕ Clear</button>
             </div>
@@ -541,7 +648,7 @@ html, body { height: 100%; overflow: hidden; background: var(--bg); color: var(-
           <div class="convert-format-row">
             <div class="format-btn selected" id="fmt-png" onclick="selectConvertFormat('png')">
               <span class="fb-ext">PNG</span>
-              <small style="color:var(--text3);font-size:11px">AVIF, HEIC, JPG, WEBP → PNG</small>
+              <small style="color:var(--text3);font-size:11px">AVIF, HEIC, JPG, WEBP, PDF → PNG</small>
             </div>
             <div class="format-btn" id="fmt-mp4" onclick="selectConvertFormat('mp4')">
               <span class="fb-ext">MP4</span>
@@ -621,6 +728,38 @@ Click "Check &amp; Update" to begin.</div>
               <button class="btn btn-ghost" onclick="api.openFolder()">Open Folder</button>
             </div>
           </div>
+          <div class="settings-row" style="display:block">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+              <div>
+                <div class="sr-label">YouTube Account</div>
+                <div class="sr-desc">Sign in to download age-restricted or region-locked videos</div>
+              </div>
+              <div style="display:flex;align-items:center;gap:10px">
+                <button class="btn btn-primary" id="yt-login-btn" onclick="youtubeLogin()" style="font-size:13px;padding:8px 20px">Sign in to Google</button>
+                <button class="btn btn-danger" id="yt-logout-btn" onclick="youtubeLogout()" style="font-size:12px;padding:8px 16px;display:none">Sign Out</button>
+              </div>
+            </div>
+
+            <div id="yt-account-info" style="display:none;padding:12px 16px;background:var(--bg3);border:1px solid rgba(71,255,176,0.2);border-radius:var(--radius-sm);margin-bottom:14px">
+              <div style="display:flex;align-items:center;gap:10px">
+                <div style="width:32px;height:32px;border-radius:50%;background:rgba(71,255,176,0.15);display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0">👤</div>
+                <div>
+                  <div style="font-size:11px;color:var(--text3);margin-bottom:2px">Signed in as</div>
+                  <div style="font-size:13px;font-weight:700;color:var(--green);font-family:var(--mono)" id="yt-auth-email">—</div>
+                </div>
+              </div>
+            </div>
+
+            <div class="warning-banner">
+              <div class="wb-icon">&#9888;</div>
+              <div class="wb-text">
+                <strong>Do NOT use your personal or work Google account.</strong><br>
+                Google may <strong>flag, restrict, or permanently ban</strong> accounts used with third-party download tools.
+                Create a <strong>brand new throwaway Google account</strong> specifically for this app — one that is not connected to any personal data, email, or services you care about.
+              </div>
+            </div>
+          </div>
+
           <div class="settings-row">
             <div class="sr-left">
               <div class="sr-label">yt-dlp Version</div>
@@ -631,9 +770,16 @@ Click "Check &amp; Update" to begin.</div>
           <div class="settings-row">
             <div class="sr-left">
               <div class="sr-label">About</div>
-              <div class="sr-desc">RAVdownloader by Colin Christy — Internal tool</div>
+              <div class="sr-desc">RAVdownloader by Colin Christy</div>
             </div>
-            <span style="font-size:12px;color:var(--text3);font-family:var(--mono)">v2.0.0</span>
+            <span style="font-size:12px;color:var(--text3);font-family:var(--mono)" id="settings-app-version">v2.1.0 (3-15-26)</span>
+          </div>
+          <div class="settings-row">
+            <div class="sr-left">
+              <div class="sr-label">App Update</div>
+              <div class="sr-desc">Check for a new version of RAVdownloader</div>
+            </div>
+            <button class="btn btn-ghost" id="settings-app-update-btn" onclick="checkForAppUpdateManual()">Check for Update</button>
           </div>
           <div class="settings-row">
             <div class="sr-left">
@@ -682,6 +828,108 @@ Click "Check &amp; Update" to begin.</div>
   </div>
 </div>
 
+<!-- ── WELCOME MODAL ── -->
+<div class="welcome-overlay" id="welcome-modal">
+  <div class="welcome-modal" style="max-height:85vh;overflow-y:auto">
+    <div class="welcome-logo">R</div>
+    <div class="welcome-title">Welcome to RAV<span>downloader</span></div>
+    <div class="welcome-subtitle">Thanks for using RAVdownloader! Quick setup to get you started.</div>
+
+    <!-- Step 1 -->
+    <div class="welcome-step">
+      <div class="welcome-step-header">
+        <div class="welcome-step-num">1</div>
+        <div class="welcome-step-title">Choose Download Folder</div>
+      </div>
+      <div class="welcome-step-desc">Where downloaded files will be saved.</div>
+      <div class="welcome-step-content">
+        <div class="welcome-folder-path" id="welcome-path">Loading...</div>
+        <button class="btn btn-ghost" onclick="welcomeChooseFolder()" style="white-space:nowrap;font-size:12px;padding:6px 14px">Change</button>
+      </div>
+    </div>
+
+    <!-- Step 2 -->
+    <div class="welcome-step">
+      <div class="welcome-step-header">
+        <div class="welcome-step-num">2</div>
+        <div class="welcome-step-title">Update yt-dlp</div>
+        <span style="font-size:10px;font-weight:700;color:var(--accent);background:var(--accent-dim);padding:2px 8px;border-radius:4px;margin-left:auto">RECOMMENDED</span>
+      </div>
+      <div class="welcome-step-desc">Get the latest version for best compatibility and bug fixes.</div>
+      <div class="welcome-step-content">
+        <button class="btn btn-primary" id="welcome-update-btn" onclick="welcomeUpdateYtdlp()" style="white-space:nowrap;font-size:12px;padding:8px 18px">Update Now</button>
+      </div>
+      <div id="welcome-update-progress" style="display:none;margin-top:10px">
+        <div style="height:5px;background:var(--bg);border-radius:99px;overflow:hidden">
+          <div id="welcome-update-bar" style="height:100%;background:var(--accent);border-radius:99px;transition:width 0.3s;width:0%"></div>
+        </div>
+        <div id="welcome-update-status" style="font-size:10px;font-family:var(--mono);color:var(--text3);margin-top:4px"></div>
+      </div>
+    </div>
+
+    <!-- Step 3 -->
+    <div class="welcome-step">
+      <div class="welcome-step-header">
+        <div class="welcome-step-num">3</div>
+        <div class="welcome-step-title">YouTube Account</div>
+        <span style="font-size:10px;font-weight:600;color:var(--text3);margin-left:auto">OPTIONAL</span>
+      </div>
+      <div class="welcome-step-desc">Sign in to download age-restricted or region-locked YouTube videos.</div>
+      <div class="welcome-step-content">
+        <button class="btn btn-ghost" id="welcome-login-btn" onclick="welcomeGoogleLogin()" style="white-space:nowrap;font-size:12px;padding:6px 14px">Sign in to Google</button>
+        <span class="welcome-auth-status not-logged" id="welcome-auth-status">Not signed in</span>
+      </div>
+      <div class="welcome-warn-text">
+        <strong>&#9888; Do NOT use your personal or work account.</strong> Google may ban accounts used with download tools. Create a <strong>new throwaway Google account</strong> just for this app.
+      </div>
+    </div>
+
+    <!-- Bug report -->
+    <div class="welcome-bug-box">
+      <div class="wbb-icon">&#128027;</div>
+      <div class="wbb-text">
+        Found a bug? Report it to <a href="mailto:Colin@colinchristy.cc">Colin@colinchristy.cc</a>
+      </div>
+    </div>
+
+    <button class="welcome-go-btn" onclick="dismissWelcome()">Get Started</button>
+  </div>
+</div>
+
+<!-- ── UPDATE AVAILABLE POPUP ── -->
+<div class="update-popup-overlay" id="update-popup">
+  <div class="update-popup">
+    <div class="up-icon">&#9889;</div>
+    <div class="up-title">yt-dlp Update Available</div>
+    <div class="up-desc">A new version of yt-dlp is available with the latest fixes and site support.</div>
+    <div class="up-version" id="update-popup-version"></div>
+    <div class="up-btns">
+      <button style="background:var(--bg3);color:var(--text2);border:1px solid var(--border)" onclick="skipUpdate()">Skip</button>
+      <button style="background:var(--accent);color:#000" onclick="acceptUpdate()">Update (Recommended)</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── APP UPDATE POPUP ── -->
+<div class="app-update-overlay" id="app-update-popup">
+  <div class="app-update-popup">
+    <div style="font-size:36px;margin-bottom:16px">&#127381;</div>
+    <div style="font-size:18px;font-weight:800;margin-bottom:6px">RAVdownloader Update Available</div>
+    <div style="font-size:13px;color:var(--text2);margin-bottom:6px;line-height:1.5">A new version of RAVdownloader is available.</div>
+    <div style="font-size:12px;font-family:var(--mono);color:var(--accent);margin-bottom:20px" id="app-update-version"></div>
+    <div id="app-update-progress-area" style="display:none;margin-bottom:16px">
+      <div style="height:6px;background:var(--bg4);border-radius:99px;overflow:hidden">
+        <div id="app-update-bar" style="height:100%;background:var(--accent);border-radius:99px;transition:width 0.3s;width:0%"></div>
+      </div>
+      <div id="app-update-status" style="font-size:11px;font-family:var(--mono);color:var(--text3);margin-top:6px">Downloading...</div>
+    </div>
+    <div class="up-btns" id="app-update-btns">
+      <button style="flex:1;padding:12px;border-radius:var(--radius-sm);border:none;font-family:var(--font);font-size:14px;font-weight:700;cursor:pointer;background:var(--bg3);color:var(--text2);border:1px solid var(--border)" onclick="dismissAppUpdate()">Skip</button>
+      <button style="flex:1;padding:12px;border-radius:var(--radius-sm);border:none;font-family:var(--font);font-size:14px;font-weight:700;cursor:pointer;background:var(--accent);color:#000" id="app-update-download-btn" onclick="startAppUpdate()">Update (Recommended)</button>
+    </div>
+  </div>
+</div>
+
 <!-- ── TOAST ── -->
 <div id="toast"></div>
 
@@ -715,6 +963,9 @@ async function init() {
     if (el) el.textContent += '\n' + msg;
   });
 
+  // Restore YouTube auth state
+  updateAuthStatus();
+
   // Auto-download toggle → swap button appearance
   document.getElementById('auto-download-toggle').addEventListener('change', function() {
     const btn = document.getElementById('main-action-btn');
@@ -731,6 +982,37 @@ async function init() {
   document.getElementById('bw-enable-toggle').addEventListener('change', function() {
     document.getElementById('bw-input').style.display = this.checked ? '' : 'none';
     document.getElementById('bw-unit').style.display = this.checked ? '' : 'none';
+  });
+
+  // Get app version info
+  const appInfo = await api.getAppVersion();
+  document.getElementById('sidebar-app-version').textContent = `v${appInfo.version} (${appInfo.date})`;
+  document.getElementById('settings-app-version').textContent = `v${appInfo.version} (${appInfo.date})`;
+
+  // Show welcome on first install OR version upgrade
+  const isNewVersion = settings.lastSeenVersion !== appInfo.version;
+  if (isNewVersion) {
+    document.getElementById('welcome-path').textContent = settings.downloadPath || 'Default (Downloads/RAVdownloader)';
+    setTimeout(() => document.getElementById('welcome-modal').classList.add('open'), 300);
+  } else {
+    // Check for yt-dlp updates in background
+    checkForYtdlpUpdate();
+    // Check for app updates in background
+    checkForAppUpdate();
+  }
+
+  // Listen for yt-dlp download progress (for welcome screen bar)
+  api.onYtdlpDownloadProgress(({ pct }) => {
+    const bar = document.getElementById('welcome-update-bar');
+    if (bar) bar.style.width = pct + '%';
+  });
+
+  // Listen for app update download progress
+  api.onAppUpdateProgress((pct) => {
+    const bar = document.getElementById('app-update-bar');
+    const status = document.getElementById('app-update-status');
+    if (bar) bar.style.width = pct + '%';
+    if (status) status.textContent = pct >= 100 ? 'Installing... app will restart' : `Downloading... ${pct}%`;
   });
 }
 init();
@@ -938,7 +1220,7 @@ async function showQualityPicker(url) {
       // Auto-select best after 1.5s
       setTimeout(() => {
         closeModal('quality-modal');
-        resolve('bestvideo[vcodec^=avc1]+bestaudio[acodec^=mp4a]/bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]');
+        resolve('bestvideo[vcodec^=avc1]+bestaudio[acodec^=mp4a]/bestvideo[vcodec^=avc1]+bestaudio/bestvideo+bestaudio/best*[ext=mp4]/best*');
       }, 1500);
       return;
     }
@@ -1114,7 +1396,7 @@ function selectConvertFormat(fmt) {
 }
 
 async function pickConvertFiles() {
-  const imageFilters = [{ name: 'Images', extensions: ['avif','heic','jpg','jpeg','png','webp','tiff','bmp'] }];
+  const imageFilters = [{ name: 'Images & PDFs', extensions: ['avif','heic','jpg','jpeg','png','webp','tiff','bmp','pdf'] }];
   const videoFilters = [{ name: 'Videos', extensions: ['mov','mkv','avi','webm','mp4','m4v','flv','wmv'] }];
   const filters = selectedConvertFormat === 'png' ? imageFilters : videoFilters;
   const files = await api.chooseFiles({ title: 'Select Files to Convert', filters });
@@ -1141,7 +1423,9 @@ async function startConversion() {
     const statusEl = document.getElementById(`cfi-${i}`);
     if (statusEl) { statusEl.textContent = 'Converting…'; statusEl.className = 'cfi-status converting'; }
     const outputDir = dl || f.path.substring(0, f.path.lastIndexOf('\\') || f.path.lastIndexOf('/'));
-    const result = await api.convertFile({ inputPath: f.path, outputFormat: selectedConvertFormat, outputDir });
+    const isPdf = f.path.toLowerCase().endsWith('.pdf');
+    const fmt = (selectedConvertFormat === 'png' && isPdf) ? 'pdf-png' : selectedConvertFormat;
+    const result = await api.convertFile({ inputPath: f.path, outputFormat: fmt, outputDir });
     f.status = result.success ? 'done' : 'error';
     if (statusEl) {
       statusEl.textContent = result.success ? '✓ Done' : '✗ Error';
@@ -1161,6 +1445,260 @@ function capitalize(s) { return s.charAt(0).toUpperCase() + s.slice(1); }
 document.getElementById('url-input').addEventListener('keydown', e => {
   if (e.key === 'Enter') addToQueue();
 });
+
+// ──────────────────────────────────────────────────────────────
+// Welcome Screen
+// ──────────────────────────────────────────────────────────────
+async function welcomeChooseFolder() {
+  const p = await api.chooseFolder();
+  if (p) {
+    document.getElementById('welcome-path').textContent = p;
+    updatePathDisplay(p);
+    settings.downloadPath = p;
+  }
+}
+
+async function welcomeUpdateYtdlp() {
+  const btn = document.getElementById('welcome-update-btn');
+  const progressArea = document.getElementById('welcome-update-progress');
+  const bar = document.getElementById('welcome-update-bar');
+  const status = document.getElementById('welcome-update-status');
+  btn.textContent = 'Updating…';
+  btn.disabled = true;
+  progressArea.style.display = '';
+  bar.style.width = '0%';
+  status.textContent = 'Downloading latest version…';
+  status.style.color = 'var(--text3)';
+
+  const result = await api.updateYtdlp(true);
+  if (result.success) {
+    bar.style.width = '100%';
+    bar.style.background = 'var(--green)';
+    status.style.color = 'var(--green)';
+    status.textContent = 'Updated to ' + result.version;
+    btn.textContent = 'Updated';
+    document.getElementById('sidebar-version').textContent = result.version;
+    document.getElementById('settings-version').textContent = result.version;
+    document.getElementById('update-current-version').textContent = result.version;
+  } else {
+    bar.style.background = 'var(--red)';
+    status.style.color = 'var(--red)';
+    status.textContent = 'Update failed: ' + result.error;
+    btn.textContent = 'Retry Update';
+    btn.disabled = false;
+  }
+}
+
+async function welcomeGoogleLogin() {
+  const btn = document.getElementById('welcome-login-btn');
+  const statusEl = document.getElementById('welcome-auth-status');
+
+  const confirmed = confirm(
+    '⚠ IMPORTANT — READ BEFORE SIGNING IN\n\n' +
+    'Do NOT use your personal or work Google account.\n\n' +
+    'Google may ban accounts used with third-party download tools. ' +
+    'Create a brand new Google account specifically for this app — ' +
+    'one that is NOT connected to any personal data, email, or services you care about.\n\n' +
+    'Continue to sign in?'
+  );
+  if (!confirmed) return;
+
+  btn.textContent = 'Signing in…';
+  btn.disabled = true;
+
+  const result = await api.youtubeLogin();
+  if (result.success) {
+    settings.youtubeAuth = 'enabled';
+    await api.setSettings({ youtubeAuth: 'enabled' });
+    statusEl.textContent = 'Signed in';
+    statusEl.className = 'welcome-auth-status logged-in';
+    btn.textContent = 'Signed in';
+    updateAuthStatus();
+  } else {
+    btn.textContent = 'Sign in to Google';
+    btn.disabled = false;
+    if (result.error !== 'Login window closed') {
+      showToast('Sign in failed: ' + result.error, 'error');
+    }
+  }
+}
+
+async function dismissWelcome() {
+  document.getElementById('welcome-modal').classList.remove('open');
+  const appInfo = await api.getAppVersion();
+  settings.lastSeenVersion = appInfo.version;
+  await api.setSettings({ lastSeenVersion: appInfo.version });
+  // After dismissing welcome, check for updates
+  checkForYtdlpUpdate();
+  checkForAppUpdate();
+}
+
+// ──────────────────────────────────────────────────────────────
+// Startup Update Check
+// ──────────────────────────────────────────────────────────────
+async function checkForYtdlpUpdate() {
+  try {
+    const info = await api.checkYtdlpUpdate();
+    if (info.updateAvailable) {
+      const versionEl = document.getElementById('update-popup-version');
+      versionEl.textContent = info.currentVersion
+        ? `${info.currentVersion}  →  ${info.latestVersion}`
+        : `Latest: ${info.latestVersion}`;
+      document.getElementById('update-popup').classList.add('open');
+    }
+  } catch {}
+}
+
+function skipUpdate() {
+  document.getElementById('update-popup').classList.remove('open');
+}
+
+async function acceptUpdate() {
+  document.getElementById('update-popup').classList.remove('open');
+  // Switch to update view and trigger the update
+  const updateBtn = document.querySelector('[data-view="update"]');
+  if (updateBtn) switchView(updateBtn);
+  doUpdate();
+}
+
+// ──────────────────────────────────────────────────────────────
+// App Self-Update
+// ──────────────────────────────────────────────────────────────
+let appUpdateDownloadUrl = '';
+
+async function checkForAppUpdate() {
+  try {
+    const info = await api.checkAppUpdate();
+    if (info.updateAvailable && info.downloadUrl) {
+      appUpdateDownloadUrl = info.downloadUrl;
+      document.getElementById('app-update-version').textContent =
+        `v${info.currentVersion}  →  v${info.latestVersion}`;
+      document.getElementById('app-update-popup').classList.add('open');
+    }
+  } catch {}
+}
+
+async function checkForAppUpdateManual() {
+  const btn = document.getElementById('settings-app-update-btn');
+  btn.textContent = 'Checking…';
+  btn.disabled = true;
+  try {
+    const info = await api.checkAppUpdate();
+    if (info.updateAvailable && info.downloadUrl) {
+      appUpdateDownloadUrl = info.downloadUrl;
+      document.getElementById('app-update-version').textContent =
+        `v${info.currentVersion}  →  v${info.latestVersion}`;
+      document.getElementById('app-update-popup').classList.add('open');
+    } else {
+      showToast('You are on the latest version', 'success');
+    }
+  } catch {
+    showToast('Could not check for updates', 'error');
+  }
+  btn.textContent = 'Check for Update';
+  btn.disabled = false;
+}
+
+function dismissAppUpdate() {
+  document.getElementById('app-update-popup').classList.remove('open');
+}
+
+async function startAppUpdate() {
+  const btn = document.getElementById('app-update-download-btn');
+  const btnsArea = document.getElementById('app-update-btns');
+  const progressArea = document.getElementById('app-update-progress-area');
+
+  btn.textContent = 'Downloading…';
+  btn.disabled = true;
+  progressArea.style.display = '';
+
+  const result = await api.downloadAppUpdate(appUpdateDownloadUrl);
+  if (!result.success) {
+    document.getElementById('app-update-status').textContent = 'Failed: ' + result.error;
+    document.getElementById('app-update-bar').style.background = 'var(--red)';
+    btn.textContent = 'Retry';
+    btn.disabled = false;
+  }
+  // If success, the app will quit and installer will run
+}
+
+// ──────────────────────────────────────────────────────────────
+// YouTube Auth
+// ──────────────────────────────────────────────────────────────
+async function youtubeLogin() {
+  const confirmed = confirm(
+    '⚠ IMPORTANT — READ BEFORE SIGNING IN\n\n' +
+    'Do NOT use your personal or work Google account.\n\n' +
+    'Google may ban accounts used with third-party download tools. ' +
+    'Create a brand new Google account specifically for this app — ' +
+    'one that is NOT connected to any personal data, email, or services you care about.\n\n' +
+    'Continue to sign in?'
+  );
+  if (!confirmed) return;
+
+  const btn = document.getElementById('yt-login-btn');
+  btn.textContent = 'Signing in…';
+  btn.disabled = true;
+
+  const result = await api.youtubeLogin();
+
+  if (result.success) {
+    settings.youtubeAuth = 'enabled';
+    await api.setSettings({ youtubeAuth: 'enabled' });
+    showToast('Google account connected', 'success');
+
+    // Show the email immediately from the login result
+    if (result.email) {
+      document.getElementById('yt-auth-email').textContent = result.email;
+    }
+    updateAuthStatus();
+  } else {
+    if (result.error !== 'Login window closed') {
+      showToast('Sign in failed: ' + result.error, 'error');
+    }
+  }
+
+  btn.textContent = 'Sign in to Google';
+  btn.disabled = false;
+}
+
+async function youtubeLogout() {
+  const result = await api.youtubeLogout();
+  if (result.success) {
+    settings.youtubeAuth = 'none';
+    await api.setSettings({ youtubeAuth: 'none' });
+    showToast('Google account disconnected', 'info');
+    updateAuthStatus();
+  }
+}
+
+async function updateAuthStatus() {
+  const status = await api.youtubeAuthStatus();
+  const loginBtn = document.getElementById('yt-login-btn');
+  const logoutBtn = document.getElementById('yt-logout-btn');
+  const accountInfo = document.getElementById('yt-account-info');
+  const emailEl = document.getElementById('yt-auth-email');
+
+  if (status.loggedIn && settings.youtubeAuth === 'enabled') {
+    loginBtn.style.display = 'none';
+    logoutBtn.style.display = '';
+    accountInfo.style.display = '';
+
+    if (status.email) {
+      emailEl.textContent = status.email;
+    } else {
+      emailEl.textContent = 'Fetching account info...';
+      // Try to fetch email in background using stored cookies
+      api.youtubeRefreshEmail().then(result => {
+        emailEl.textContent = result.email || 'Signed in (email unavailable)';
+      });
+    }
+  } else {
+    loginBtn.style.display = '';
+    logoutBtn.style.display = 'none';
+    accountInfo.style.display = 'none';
+  }
+}
 
 // ── Diagnostics ──────────────────────────────────────────────
 async function runDiagnostics() {

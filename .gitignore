@@ -4,6 +4,7 @@ bin/yt-dlp.exe
 bin/ffmpeg.exe
 bin/ffplay.exe
 bin/ffprobe.exe
+bin/deno.exe
 bin/*.bak
 bin/*.tmp
 *.log

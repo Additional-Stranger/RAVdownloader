@@ -1,6 +1,6 @@
 {
   "name": "ravdownloader",
-  "version": "2.0.0",
+  "version": "2.1.0",
   "description": "RAVdownloader by Colin - Premium Video Downloader",
   "main": "src/main.js",
   "scripts": {
@@ -12,10 +12,19 @@
     "appId": "com.colin.ravdownloader",
     "productName": "RAVdownloader",
     "win": {
-      "target": [{ "target": "nsis", "arch": ["x64"] }],
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
       "icon": "assets/icon.ico",
       "requestedExecutionLevel": "requireAdministrator"
     },
+    "afterPack": "build/afterPack.js",
+    "forceCodeSigning": false,
     "nsis": {
       "oneClick": false,
       "allowToChangeInstallationDirectory": false,
@@ -27,7 +36,13 @@
       "include": "installer.nsh"
     },
     "extraResources": [
-      { "from": "bin/", "to": "bin/", "filter": ["**/*"] }
+      {
+        "from": "bin/",
+        "to": "bin/",
+        "filter": [
+          "**/*"
+        ]
+      }
     ],
     "files": [
       "src/**/*",
@@ -39,5 +54,8 @@
   "devDependencies": {
     "electron": "^28.0.0",
     "electron-builder": "^24.0.0"
+  },
+  "dependencies": {
+    "pdfjs-dist": "^3.11.174"
   }
 }
