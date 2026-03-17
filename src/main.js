@@ -6,8 +6,8 @@ const https = require('https');
 const http  = require('http');
 
 // ─── App info ────────────────────────────────────────────────────────────────
-const APP_VERSION = '2.1.0';
-const APP_VERSION_DATE = '3-15-26';
+const APP_VERSION = '2.1.1';
+const APP_VERSION_DATE = '3-16-26';
 // URL to a JSON file you host: { "version": "2.1.0", "downloadUrl": "https://..." }
 const APP_UPDATE_URL = 'https://ravdownloader-update.djcolinchristy.workers.dev/';
 
@@ -434,11 +434,21 @@ ipcMain.handle('start-download', async (_e, { id, url, type, formatId, bandwidth
 
     activeProcs.set(id, proc);
     let stderrBuf = '';
+    let mergedFile = '';
 
     proc.stdout.on('data', d => {
       d.toString().split('\n').forEach(line => {
         const l = line.trim();
-        if (l) mainWindow?.webContents.send('dl-progress', { id, line: l });
+        if (l) {
+          // Capture the final output filename from yt-dlp
+          const mergeMatch = l.match(/^\[Merger\] Merging formats into "(.+)"$/);
+          const destMatch  = l.match(/^\[download\] Destination: (.+)$/);
+          const alreadyMatch = l.match(/^\[download\] (.+\.mp4) has already been downloaded$/);
+          if (mergeMatch) mergedFile = mergeMatch[1];
+          else if (!mergedFile && destMatch && destMatch[1].endsWith('.mp4')) mergedFile = destMatch[1];
+          else if (alreadyMatch) mergedFile = alreadyMatch[1];
+          mainWindow?.webContents.send('dl-progress', { id, line: l });
+        }
       });
     });
 
@@ -457,14 +467,63 @@ ipcMain.handle('start-download', async (_e, { id, url, type, formatId, bandwidth
       resolve({ success: false, error: 'Spawn error: ' + err.message });
     });
 
-    proc.on('close', code => {
+    proc.on('close', async (code) => {
       activeProcs.delete(id);
       logEntry({ event: 'download-end', id, code, stderr: stderrBuf.slice(0, 500) });
-      if (code === 0) {
-        resolve({ success: true });
-      } else {
+      if (code !== 0) {
         resolve({ success: false, error: stderrBuf.slice(-800) || `Process exited with code ${code}` });
+        return;
       }
+
+      // Check if the downloaded video needs re-encoding for Premiere compatibility
+      if (type !== 'mp3' && mergedFile && binaryOk(FFMPEG) && fs.existsSync(mergedFile)) {
+        try {
+          const probe = await runExe(
+            path.join(BIN_DIR, 'ffprobe.exe'),
+            ['-v', 'quiet', '-select_streams', 'v:0', '-show_entries', 'stream=codec_name', '-of', 'csv=p=0', mergedFile],
+            10000
+          );
+          const codec = probe.stdout.trim().split('\n')[0];
+          if (codec && codec !== 'h264' && codec !== 'mpeg4') {
+            mainWindow?.webContents.send('dl-progress', { id, line: `Re-encoding ${codec} → H.264 for Premiere compatibility...` });
+            logEntry({ event: 'reencode-start', id, codec, file: mergedFile });
+            const tmpOut = mergedFile.replace(/\.mp4$/i, '_h264.mp4');
+            const enc = await new Promise((res) => {
+              let encProc;
+              try {
+                encProc = spawn(FFMPEG, [
+                  '-i', mergedFile,
+                  '-c:v', 'libx264', '-preset', 'fast', '-crf', '18',
+                  '-c:a', 'aac', '-b:a', '192k',
+                  '-pix_fmt', 'yuv420p', '-movflags', '+faststart',
+                  '-y', tmpOut,
+                ], { windowsHide: true });
+              } catch (e) { res({ success: false }); return; }
+              encProc.stderr.on('data', d => {
+                const progressLine = d.toString().trim();
+                if (progressLine.includes('frame=') || progressLine.includes('time=')) {
+                  mainWindow?.webContents.send('dl-progress', { id, line: `Re-encoding: ${progressLine.slice(-80)}` });
+                }
+              });
+              encProc.on('error', () => res({ success: false }));
+              encProc.on('close', c => res({ success: c === 0 }));
+            });
+            if (enc.success && fs.existsSync(tmpOut)) {
+              fs.unlinkSync(mergedFile);
+              fs.renameSync(tmpOut, mergedFile);
+              mainWindow?.webContents.send('dl-progress', { id, line: 'Re-encode complete — Premiere compatible' });
+              logEntry({ event: 'reencode-done', id, file: mergedFile });
+            } else {
+              // Clean up failed re-encode, keep original
+              try { fs.unlinkSync(tmpOut); } catch {}
+              logEntry({ event: 'reencode-failed', id, file: mergedFile });
+            }
+          }
+        } catch (probeErr) {
+          logEntry({ event: 'probe-error', id, error: probeErr.message });
+        }
+      }
+      resolve({ success: true });
     });
   });
 });

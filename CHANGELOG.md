@@ -1,5 +1,17 @@
 # Changelog
 
+## v2.1.1 (2026-03-16)
+
+### Bug Fixes
+- **Auto re-encode for Premiere compatibility** — Downloads from Instagram, Twitter/X, and other sites that serve VP9 or AV1 video are now automatically re-encoded to H.264 after download. Video and audio both work correctly in Adobe Premiere.
+- **Improved format fallback chains** — Download format selectors now include broader catch-all fallbacks so downloads never fail due to missing codec-specific formats.
+- **Bundled Deno JS runtime** — Fixes "Requested format is not available" errors on YouTube caused by recent yt-dlp versions requiring a JavaScript runtime for full format extraction.
+- **yt-dlp spawns with BIN_DIR on PATH** — Ensures yt-dlp can find bundled deno.exe regardless of system PATH.
+- **Removed `youtube:skip=dash`** from format listing — Format picker now shows all available resolutions accurately.
+- **Fixed renderer fallback format** — When format fetching fails, the automatic fallback now uses the same robust format chain as normal downloads.
+
+---
+
 ## v2.1.0 (2026-03-15)
 
 ### New Features
