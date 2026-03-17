@@ -57,6 +57,9 @@ contextBridge.exposeInMainWorld('api', {
   youtubeAuthStatus:   ()  => ipcRenderer.invoke('youtube-auth-status'),
   youtubeRefreshEmail: ()  => ipcRenderer.invoke('youtube-refresh-email'),
 
+  // Advanced features
+  checkFont:      ()   => ipcRenderer.invoke('check-font'),
+
   // Logs & diagnostics
   getLogs:        () => ipcRenderer.invoke('get-logs'),
   getDiagnostics: () => ipcRenderer.invoke('get-diagnostics'),

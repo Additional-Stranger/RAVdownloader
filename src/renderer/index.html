@@ -316,6 +316,31 @@ html, body { height: 100%; overflow: hidden; background: var(--bg); color: var(-
 .quality-badge.best-badge { background: var(--accent); color: #000; }
 .quality-badge.res-badge { background: var(--bg4); color: var(--text2); }
 
+/* ── Advanced panel (main page) ── */
+.adv-panel {
+  margin-bottom: 16px;
+}
+.adv-feature-row {
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border);
+}
+.adv-feature-row:last-child { border-bottom: none; }
+.adv-feature-body {
+  margin-top: 8px; margin-left: 44px;
+}
+.adv-row { display: flex; align-items: center; gap: 10px; }
+.adv-input {
+  width: 120px; background: var(--bg4); border: 1px solid var(--border); border-radius: 6px;
+  color: var(--text); font-family: var(--mono); font-size: 12px; padding: 6px 10px; outline: none;
+}
+.adv-input:focus { border-color: var(--accent); }
+.adv-input::placeholder { color: var(--text3); }
+.adv-input.error { border-color: var(--red); }
+.adv-input-wide { width: 220px; }
+.adv-hint { font-size: 10px; color: var(--text3); font-family: var(--mono); margin-top: 4px; }
+.adv-error { font-size: 10px; color: var(--red); font-family: var(--mono); margin-top: 4px; display: none; }
+.adv-warn { font-size: 10px; color: var(--orange); font-family: var(--mono); margin-top: 4px; display: none; }
+
 /* ── Supported sites ── */
 .sites-search {
   width: 100%; background: var(--bg3); border: 1px solid var(--border);
@@ -618,6 +643,82 @@ html, body { height: 100%; overflow: hidden; background: var(--bg); color: var(-
               <input type="number" class="bw-input" id="bw-input" placeholder="2048" style="display:none"/>
               <span class="bw-unit" id="bw-unit" style="display:none">KB/s</span>
             </div>
+            <label class="toggle-wrap">
+              <input type="checkbox" id="advanced-toggle" onchange="toggleAdvancedPanel()"/>
+              <div class="toggle"></div>
+              <span class="toggle-label">Advanced</span>
+            </label>
+          </div>
+        </div>
+
+        <div class="adv-panel card" id="advanced-panel" style="display:none">
+          <div class="card-title">Advanced Options</div>
+
+          <div class="adv-feature-row">
+            <label class="toggle-wrap">
+              <input type="checkbox" id="adv-blur-toggle"/>
+              <div class="toggle"></div>
+              <span class="toggle-label">16:9 Blur Pillarbox</span>
+            </label>
+            <div class="adv-hint" style="margin-left:44px">Adds blurred background fill for non-16:9 content</div>
+          </div>
+
+          <div class="adv-feature-row">
+            <label class="toggle-wrap">
+              <input type="checkbox" id="adv-limiter-toggle"/>
+              <div class="toggle"></div>
+              <span class="toggle-label">-12dB Hard Limiter</span>
+            </label>
+            <div class="adv-hint" style="margin-left:44px">Prevents audio clipping (like Premiere Pro)</div>
+          </div>
+
+          <div class="adv-feature-row">
+            <label class="toggle-wrap">
+              <input type="checkbox" id="adv-trim-toggle" onchange="document.getElementById('adv-trim-body').style.display=this.checked?'':'none'"/>
+              <div class="toggle"></div>
+              <span class="toggle-label">Trim (In/Out Points)</span>
+            </label>
+            <div class="adv-feature-body" id="adv-trim-body" style="display:none">
+              <div class="adv-row">
+                <div>
+                  <input type="text" class="adv-input" id="adv-trim-start" placeholder="00:00:00"/>
+                  <div class="adv-hint">Start</div>
+                </div>
+                <span style="color:var(--text3);font-size:13px">&rarr;</span>
+                <div>
+                  <input type="text" class="adv-input" id="adv-trim-end" placeholder="00:01:30"/>
+                  <div class="adv-hint">End</div>
+                </div>
+              </div>
+              <div class="adv-hint" style="margin-top:6px">Format: HH:MM:SS, SS, or SS.ms</div>
+              <div class="adv-error" id="adv-trim-error"></div>
+            </div>
+          </div>
+
+          <div class="adv-feature-row">
+            <label class="toggle-wrap">
+              <input type="checkbox" id="adv-source-toggle" onchange="document.getElementById('adv-source-body').style.display=this.checked?'':'none'"/>
+              <div class="toggle"></div>
+              <span class="toggle-label">Source Bug Overlay</span>
+            </label>
+            <div class="adv-feature-body" id="adv-source-body" style="display:none">
+              <input type="text" class="adv-input adv-input-wide" id="adv-source-name" placeholder="e.g. CNN"/>
+              <div class="adv-hint">Displays as SOURCE: [NAME] in top-left corner</div>
+              <div class="adv-warn" id="adv-font-warn">Font file not found — source bug disabled</div>
+              <div class="adv-error" id="adv-source-error"></div>
+            </div>
+          </div>
+
+          <div class="adv-feature-row">
+            <label class="toggle-wrap">
+              <input type="checkbox" id="adv-filename-toggle" onchange="document.getElementById('adv-filename-body').style.display=this.checked?'':'none'"/>
+              <div class="toggle"></div>
+              <span class="toggle-label">Custom Filename</span>
+            </label>
+            <div class="adv-feature-body" id="adv-filename-body" style="display:none">
+              <input type="text" class="adv-input adv-input-wide" id="adv-custom-filename" placeholder="My Video Name"/>
+              <div class="adv-hint">Extension (.mp4/.mp3) added automatically</div>
+            </div>
           </div>
         </div>
 
@@ -881,6 +982,27 @@ Click "Check &amp; Update" to begin.</div>
       </div>
       <div class="welcome-warn-text">
         <strong>&#9888; Do NOT use your personal or work account.</strong> Google may ban accounts used with download tools. Create a <strong>new throwaway Google account</strong> just for this app.
+      </div>
+    </div>
+
+    <!-- Changelog -->
+    <div class="welcome-step" id="welcome-changelog">
+      <div class="welcome-step-header">
+        <div class="welcome-step-num" style="background:var(--blue);color:#fff">&#9733;</div>
+        <div class="welcome-step-title">What's New</div>
+      </div>
+      <div class="welcome-step-desc" style="line-height:1.6" id="changelog-content">
+        <strong>Advanced Post-Processing</strong><br/>
+        &bull; 16:9 Blur Pillarbox — blurred background for non-widescreen content<br/>
+        &bull; Source Bug Overlay — broadcast-style SOURCE tag in top-left<br/>
+        &bull; Trim — cut videos with start/end timestamps<br/>
+        &bull; -12dB Hard Limiter — prevents audio clipping (like Premiere)<br/>
+        &bull; Custom Filename — name your downloads anything you want<br/>
+        <br/>
+        <strong>Improvements</strong><br/>
+        &bull; Each advanced feature has its own toggle<br/>
+        &bull; Advanced mode auto-enables instant download<br/>
+        &bull; Improved update restart reliability
       </div>
     </div>
 
@@ -1169,10 +1291,14 @@ async function downloadItem(id) {
   let formatId = null;
 
   if (item.type === 'mp4') {
-    // Show quality picker
-    formatId = await showQualityPicker(item.url);
-    if (!formatId) return; // user cancelled
+    const picked = await showQualityPicker(item.url);
+    if (!picked) return;
+    formatId = picked;
   }
+
+  // Gather advanced options from main panel (works for both mp4 and mp3)
+  const advancedOpts = getAdvancedOptions();
+  if (advancedOpts && !validateAdvancedInputs()) return;
 
   const bwEnabled = document.getElementById('bw-enable-toggle').checked;
   const bwVal = document.getElementById('bw-input').value;
@@ -1181,7 +1307,7 @@ async function downloadItem(id) {
   updateItemStatus(id, 'downloading', 0);
   currentDownloadId = id;
 
-  const result = await api.startDownload({ id, url: item.url, type: item.type, formatId, bandwidth });
+  const result = await api.startDownload({ id, url: item.url, type: item.type, formatId, bandwidth, advanced: advancedOpts });
 
   if (result.success) {
     updateItemStatus(id, 'done', 100);
@@ -1247,6 +1373,135 @@ async function showQualityPicker(url) {
       list.appendChild(div);
     });
   });
+}
+
+// ──────────────────────────────────────────────────────────────
+// Advanced Features Panel
+// ──────────────────────────────────────────────────────────────
+let fontAvailable = false;
+
+function toggleAdvancedPanel() {
+  const panel = document.getElementById('advanced-panel');
+  const checked = document.getElementById('advanced-toggle').checked;
+  panel.style.display = checked ? '' : 'none';
+  if (checked) {
+    checkFontAvailability();
+    // Auto-enable "Auto Download" when Advanced is on (skip queue)
+    const autoToggle = document.getElementById('auto-download-toggle');
+    if (!autoToggle.checked) {
+      autoToggle.checked = true;
+      autoToggle.dispatchEvent(new Event('change'));
+    }
+  }
+}
+
+async function checkFontAvailability() {
+  try {
+    const result = await api.checkFont();
+    fontAvailable = result.available;
+    const warn = document.getElementById('adv-font-warn');
+    const input = document.getElementById('adv-source-name');
+    if (!fontAvailable) {
+      warn.style.display = 'block';
+      input.disabled = true;
+      input.style.opacity = '0.5';
+    } else {
+      warn.style.display = 'none';
+      input.disabled = false;
+      input.style.opacity = '1';
+    }
+  } catch {
+    fontAvailable = false;
+  }
+}
+
+function parseTimeToSeconds(str) {
+  if (!str || !str.trim()) return null;
+  str = str.trim();
+  // HH:MM:SS or MM:SS
+  const colons = str.split(':');
+  if (colons.length === 3) {
+    const [h, m, s] = colons.map(Number);
+    if (isNaN(h) || isNaN(m) || isNaN(s)) return NaN;
+    return h * 3600 + m * 60 + s;
+  }
+  if (colons.length === 2) {
+    const [m, s] = colons.map(Number);
+    if (isNaN(m) || isNaN(s)) return NaN;
+    return m * 60 + s;
+  }
+  // SS or SS.ms
+  const num = parseFloat(str);
+  if (isNaN(num)) return NaN;
+  return num;
+}
+
+function validateAdvancedInputs() {
+  let valid = true;
+  const trimError = document.getElementById('adv-trim-error');
+  trimError.style.display = 'none';
+  document.getElementById('adv-trim-start').classList.remove('error');
+  document.getElementById('adv-trim-end').classList.remove('error');
+  document.getElementById('adv-source-error').style.display = 'none';
+
+  if (document.getElementById('adv-trim-toggle').checked) {
+    const trimStart = document.getElementById('adv-trim-start').value.trim();
+    const trimEnd = document.getElementById('adv-trim-end').value.trim();
+    if (trimStart || trimEnd) {
+      const startSec = parseTimeToSeconds(trimStart);
+      const endSec = parseTimeToSeconds(trimEnd);
+      if (trimStart && isNaN(startSec)) {
+        trimError.textContent = 'Invalid start time format';
+        trimError.style.display = 'block';
+        document.getElementById('adv-trim-start').classList.add('error');
+        valid = false;
+      }
+      if (trimEnd && isNaN(endSec)) {
+        trimError.textContent = 'Invalid end time format';
+        trimError.style.display = 'block';
+        document.getElementById('adv-trim-end').classList.add('error');
+        valid = false;
+      }
+      if (valid && trimStart && trimEnd && startSec !== null && endSec !== null && endSec <= startSec) {
+        trimError.textContent = 'End time must be greater than start time';
+        trimError.style.display = 'block';
+        document.getElementById('adv-trim-start').classList.add('error');
+        document.getElementById('adv-trim-end').classList.add('error');
+        valid = false;
+      }
+    }
+  }
+  return valid;
+}
+
+function getAdvancedOptions() {
+  if (!document.getElementById('advanced-toggle').checked) return null;
+  const opts = {};
+
+  if (document.getElementById('adv-trim-toggle').checked) {
+    const start = document.getElementById('adv-trim-start').value.trim();
+    const end = document.getElementById('adv-trim-end').value.trim();
+    if (start || end) {
+      opts.trim = {};
+      if (start) opts.trim.start = start;
+      if (end) opts.trim.end = end;
+    }
+  }
+
+  if (document.getElementById('adv-source-toggle').checked) {
+    const name = document.getElementById('adv-source-name').value.trim();
+    if (name && fontAvailable) opts.sourceName = name;
+  }
+
+  if (document.getElementById('adv-blur-toggle').checked) opts.blurPillarbox = true;
+  if (document.getElementById('adv-limiter-toggle').checked) opts.hardLimiter = true;
+
+  if (document.getElementById('adv-filename-toggle').checked) {
+    const fn = document.getElementById('adv-custom-filename').value.trim();
+    if (fn) opts.customFilename = fn;
+  }
+
+  return Object.keys(opts).length ? opts : null;
 }
 
 // ──────────────────────────────────────────────────────────────

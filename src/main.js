@@ -6,8 +6,8 @@ const https = require('https');
 const http  = require('http');
 
 // ─── App info ────────────────────────────────────────────────────────────────
-const APP_VERSION = '2.1.1';
-const APP_VERSION_DATE = '3-16-26';
+const APP_VERSION = '2.2.0';
+const APP_VERSION_DATE = '3-17-26';
 // URL to a JSON file you host: { "version": "2.1.0", "downloadUrl": "https://..." }
 const APP_UPDATE_URL = 'https://ravdownloader-update.djcolinchristy.workers.dev/';
 
@@ -39,6 +39,7 @@ function findBinDir() {
 const BIN_DIR = findBinDir();
 const YTDLP   = path.join(BIN_DIR, 'yt-dlp.exe');
 const FFMPEG  = path.join(BIN_DIR, 'ffmpeg.exe');
+const FFPROBE = path.join(BIN_DIR, 'ffprobe.exe');
 
 // ─── Data paths ───────────────────────────────────────────────────────────────
 const USER_DATA  = app.getPath('userData');
@@ -89,6 +90,122 @@ function binaryOk(p) {
     if (!fs.existsSync(p)) return false;
     return fs.statSync(p).size > 50000;
   } catch { return false; }
+}
+
+// ─── Font path resolver ────────────────────────────────────────────────────
+function resolveFontPath() {
+  const candidates = isDev ? [
+    path.join(__dirname, '..', 'fonts', 'ITC Avant Garde Gothic LT Bold.otf'),
+    path.join(process.cwd(), 'fonts', 'ITC Avant Garde Gothic LT Bold.otf'),
+  ] : [
+    path.join(process.resourcesPath, 'fonts', 'ITC Avant Garde Gothic LT Bold.otf'),
+  ];
+  for (const c of candidates) {
+    if (fs.existsSync(c)) return c;
+  }
+  return null;
+}
+
+// ─── FFprobe aspect ratio detection ────────────────────────────────────────
+async function probeVideoSize(filePath) {
+  const { stdout, code } = await runExe(FFPROBE, [
+    '-v', 'quiet',
+    '-select_streams', 'v:0',
+    '-show_entries', 'stream=width,height',
+    '-of', 'csv=p=0',
+    filePath,
+  ], 15000);
+  if (code !== 0 || !stdout.trim()) return null;
+  const parts = stdout.trim().split('\n')[0].split(',');
+  const width = parseInt(parts[0], 10);
+  const height = parseInt(parts[1], 10);
+  if (!width || !height) return null;
+  return { width, height };
+}
+
+// ─── FFmpeg filter escape ──────────────────────────────────────────────────
+function escapeFFmpegText(text) {
+  // Escape for FFmpeg drawtext text value wrapped in single quotes.
+  // Inside '...': \\ → \, and ' always ends the quote (no way to escape it).
+  // Replace apostrophes with Unicode right single quote (visually identical).
+  // Colons need \: for drawtext's own text parser.
+  return text
+    .replace(/\\/g, '\\\\')     // \ → \\
+    .replace(/'/g, '\u2019')     // ' → ' (right single quote, visually identical)
+    .replace(/:/g, '\\:')        // : → \: (drawtext text escape)
+    .replace(/%/g, '%%');         // % → %% (drawtext expression escape)
+}
+
+// ─── FFmpeg command builder (Advanced features) ────────────────────────────
+function buildAdvancedFFmpegArgs({ inputPath, outputPath, trim, sourceName, fontPath, videoWidth, videoHeight, blurPillarbox, hardLimiter }) {
+  const args = [];
+
+  // Trim: input-side seek flags (before -i for fast seeking)
+  if (trim) {
+    if (trim.start) args.push('-ss', trim.start);
+    if (trim.end) args.push('-to', trim.end);
+  }
+
+  args.push('-i', inputPath);
+
+  // Determine what processing is needed
+  const is16by9 = videoWidth && videoHeight && Math.abs((videoWidth / videoHeight) - (16 / 9)) < 0.02;
+  const needsBlur = blurPillarbox && videoWidth && videoHeight && !is16by9;
+  const needsBug = sourceName && sourceName.trim() && fontPath;
+
+  if (needsBlur || needsBug) {
+    // Build filter_complex chain
+    const filterParts = [];
+    let lastLabel;
+
+    if (needsBlur) {
+      filterParts.push(`[0:v]scale=1280:720:force_original_aspect_ratio=increase,crop=1280:720,gblur=sigma=20[bg]`);
+      filterParts.push(`[0:v]scale=1280:720:force_original_aspect_ratio=decrease[fg]`);
+      filterParts.push(`[bg][fg]overlay=(W-w)/2:(H-h)/2[composed]`);
+      lastLabel = 'composed';
+    } else {
+      filterParts.push(`[0:v]scale=1280:720[composed]`);
+      lastLabel = 'composed';
+    }
+
+    if (needsBug) {
+      const text = escapeFFmpegText('SOURCE: ' + sourceName.trim().toUpperCase());
+      const ffFontPath = fontPath.replace(/\\/g, '/').replace(/:/g, '\\:');
+
+      // Blue box + text first (drawtext box=1 creates the blue background)
+      // text at x=94, boxborderw=15 → box left edge at x=79 (adjacent to white bar)
+      // text at fixed y=51 → box top at 51-15=36, box bottom ≈ 51+text_h+15
+      filterParts.push(
+        `[${lastLabel}]drawtext=fontfile='${ffFontPath}':text='${text}':fontcolor=white:fontsize=23:x=67:y=34:box=1:boxcolor=0x2166FF:boxborderw=10[withtext]`
+      );
+      filterParts.push(
+        `[withtext]drawbox=x=50:y=24:w=7:h=37:color=white:t=fill[out]`
+      );
+      lastLabel = 'out';
+    }
+
+    // Strip the output label from the last filter (FFmpeg uses it as final output)
+    const lastIdx = filterParts.length - 1;
+    filterParts[lastIdx] = filterParts[lastIdx].replace(/\[[^\]]+\]$/, '');
+
+    args.push('-filter_complex', filterParts.join(';'));
+  } else {
+    // Simple 16:9 scale — no filter_complex needed
+    args.push('-vf', 'scale=1280:720');
+  }
+
+  if (hardLimiter) {
+    args.push('-af', 'alimiter=limit=0.251189:level=0');
+  }
+
+  args.push(
+    '-c:v', 'libx264', '-preset', 'fast', '-crf', '18',
+    '-c:a', 'aac', '-b:a', '192k',
+    '-pix_fmt', 'yuv420p', '-movflags', '+faststart',
+    '-y', outputPath
+  );
+
+  return args;
 }
 
 // Runs an EXE safely, returns { stdout, stderr, code }
@@ -375,7 +492,7 @@ ipcMain.handle('get-formats', async (_e, url) => {
 });
 
 // ─── Start download ───────────────────────────────────────────────────────────
-ipcMain.handle('start-download', async (_e, { id, url, type, formatId, bandwidth, playlistStart, playlistEnd }) => {
+ipcMain.handle('start-download', async (_e, { id, url, type, formatId, bandwidth, playlistStart, playlistEnd, advanced }) => {
   if (!binaryOk(YTDLP)) {
     return { success: false, error: `yt-dlp.exe not found in bin/ folder.\n\nExpected: ${YTDLP}` };
   }
@@ -387,22 +504,28 @@ ipcMain.handle('start-download', async (_e, { id, url, type, formatId, bandwidth
   const args = [];
 
   if (type === 'mp3') {
+    const filenameTemplate = (advanced && advanced.customFilename)
+      ? advanced.customFilename + '.%(ext)s'
+      : '%(title)s.%(ext)s';
     args.push(
       '-x', '--audio-format', 'mp3', '--audio-quality', '0',
       '--ffmpeg-location', BIN_DIR,
-      '-o', path.join(dlPath, '%(title)s.%(ext)s'),
+      '-o', path.join(dlPath, filenameTemplate),
       '--no-playlist', '--newline',
     );
   } else {
     if (!binaryOk(FFMPEG)) {
       return { success: false, error: `ffmpeg.exe not found in bin/ folder.\n\nExpected: ${FFMPEG}` };
     }
+    const filenameTemplate = (advanced && advanced.customFilename)
+      ? advanced.customFilename + '.%(ext)s'
+      : '%(title)s - %(height)sp.%(ext)s';
     const fmt = formatId || 'bestvideo[vcodec^=avc1]+bestaudio[acodec^=mp4a]/bestvideo[vcodec^=avc1]+bestaudio/bestvideo+bestaudio/best*[ext=mp4]/best*';
     args.push(
       '-f', fmt,
       '--merge-output-format', 'mp4',
       '--ffmpeg-location', BIN_DIR,
-      '-o', path.join(dlPath, '%(title)s - %(height)sp.%(ext)s'),
+      '-o', path.join(dlPath, filenameTemplate),
       '--newline',
     );
     if (playlistStart || playlistEnd) {
@@ -440,11 +563,17 @@ ipcMain.handle('start-download', async (_e, { id, url, type, formatId, bandwidth
       d.toString().split('\n').forEach(line => {
         const l = line.trim();
         if (l) {
-          // Capture the final output filename from yt-dlp
-          const mergeMatch = l.match(/^\[Merger\] Merging formats into "(.+)"$/);
-          const destMatch  = l.match(/^\[download\] Destination: (.+)$/);
+          // Capture the final output filename from yt-dlp (multiple patterns)
+          const mergeMatch   = l.match(/^\[Merger\] Merging formats into "(.+)"$/);
+          const destMatch    = l.match(/^\[download\] Destination: (.+)$/);
           const alreadyMatch = l.match(/^\[download\] (.+\.mp4) has already been downloaded$/);
-          if (mergeMatch) mergedFile = mergeMatch[1];
+          const moveMatch    = l.match(/^\[MoveFiles\] Moving file ".*" to "(.+)"$/);
+          const ffmpegMatch  = l.match(/^\[ffmpeg\] Merging formats into "(.+)"$/);
+          const extractMatch = l.match(/^\[ExtractAudio\] Destination: (.+)$/);
+          if (mergeMatch)   mergedFile = mergeMatch[1];
+          else if (ffmpegMatch) mergedFile = ffmpegMatch[1];
+          else if (moveMatch)   mergedFile = moveMatch[1];
+          else if (extractMatch) mergedFile = extractMatch[1];
           else if (!mergedFile && destMatch && destMatch[1].endsWith('.mp4')) mergedFile = destMatch[1];
           else if (alreadyMatch) mergedFile = alreadyMatch[1];
           mainWindow?.webContents.send('dl-progress', { id, line: l });
@@ -469,10 +598,24 @@ ipcMain.handle('start-download', async (_e, { id, url, type, formatId, bandwidth
 
     proc.on('close', async (code) => {
       activeProcs.delete(id);
-      logEntry({ event: 'download-end', id, code, stderr: stderrBuf.slice(0, 500) });
+      logEntry({ event: 'download-end', id, code, mergedFile, hasAdvanced: !!advanced, stderr: stderrBuf.slice(0, 500) });
       if (code !== 0) {
         resolve({ success: false, error: stderrBuf.slice(-800) || `Process exited with code ${code}` });
         return;
+      }
+
+      // Fallback: if mergedFile wasn't captured or doesn't exist, find newest .mp4 in download dir
+      if (type !== 'mp3' && (!mergedFile || !fs.existsSync(mergedFile))) {
+        try {
+          const files = fs.readdirSync(dlPath)
+            .filter(f => f.endsWith('.mp4'))
+            .map(f => ({ name: f, time: fs.statSync(path.join(dlPath, f)).mtimeMs }))
+            .sort((a, b) => b.time - a.time);
+          if (files.length && (Date.now() - files[0].time) < 60000) {
+            mergedFile = path.join(dlPath, files[0].name);
+            logEntry({ event: 'mergedFile-fallback', id, file: mergedFile });
+          }
+        } catch {}
       }
 
       // Check if the downloaded video needs re-encoding for Premiere compatibility
@@ -523,6 +666,126 @@ ipcMain.handle('start-download', async (_e, { id, url, type, formatId, bandwidth
           logEntry({ event: 'probe-error', id, error: probeErr.message });
         }
       }
+
+      // ── Advanced post-processing (blur pillarbox, trim, source bug) ──
+      const _ffmpegOk = binaryOk(FFMPEG);
+      const _fileExists = mergedFile ? fs.existsSync(mergedFile) : false;
+      logEntry({
+        event: 'advanced-check', id,
+        mergedFile: mergedFile || '(empty)',
+        hasAdvanced: !!advanced,
+        advanced: advanced || null,
+        ffmpegPath: FFMPEG,
+        ffmpegOk: _ffmpegOk,
+        fileExists: _fileExists,
+        type,
+      });
+      if (type !== 'mp3' && mergedFile && advanced && _ffmpegOk && _fileExists) {
+        try {
+          const hasTrim = advanced.trim && (advanced.trim.start || advanced.trim.end);
+          const hasSourceBug = advanced.sourceName && advanced.sourceName.trim();
+          const fontPath = hasSourceBug ? resolveFontPath() : null;
+          logEntry({ event: 'advanced-flags', id, hasTrim, hasSourceBug, fontPath: fontPath || '(none)' });
+
+          // Probe video dimensions for blur pillarbox detection
+          let videoSize = null;
+          try {
+            videoSize = await probeVideoSize(mergedFile);
+          } catch (e) {
+            logEntry({ event: 'advanced-probe-error', id, error: e.message });
+          }
+          logEntry({ event: 'advanced-probe-result', id, videoSize });
+
+          const hasBlur = advanced.blurPillarbox;
+          const hasLimiter = advanced.hardLimiter;
+          const needsAdvanced = hasTrim || (hasSourceBug && fontPath) || (hasBlur && videoSize) || hasLimiter;
+          if (needsAdvanced) {
+            mainWindow?.webContents.send('dl-progress', { id, line: 'Applying advanced processing (blur pillarbox / trim / source bug)...' });
+
+            const tmpOut = mergedFile.replace(/\.mp4$/i, '_advanced.mp4');
+            const ffmpegArgs = buildAdvancedFFmpegArgs({
+              inputPath: mergedFile,
+              outputPath: tmpOut,
+              trim: hasTrim ? advanced.trim : null,
+              sourceName: hasSourceBug ? advanced.sourceName : null,
+              fontPath: fontPath,
+              videoWidth: videoSize ? videoSize.width : 1280,
+              videoHeight: videoSize ? videoSize.height : 720,
+              blurPillarbox: advanced.blurPillarbox || false,
+              hardLimiter: advanced.hardLimiter || false,
+            });
+            logEntry({ event: 'advanced-start', id, file: mergedFile, ffmpegArgs: [FFMPEG, ...ffmpegArgs].join(' ') });
+
+            let ffmpegStderr = '';
+            const advResult = await new Promise((res) => {
+              let advProc;
+              try {
+                advProc = spawn(FFMPEG, ffmpegArgs, { windowsHide: true });
+              } catch (e) {
+                logEntry({ event: 'advanced-spawn-error', id, error: e.message });
+                res({ success: false });
+                return;
+              }
+              advProc.stderr.on('data', d => {
+                const chunk = d.toString();
+                ffmpegStderr += chunk;
+                const progressLine = chunk.trim();
+                if (progressLine.includes('frame=') || progressLine.includes('time=')) {
+                  mainWindow?.webContents.send('dl-progress', { id, line: `Processing: ${progressLine.slice(-80)}` });
+                }
+              });
+              advProc.on('error', (err) => {
+                logEntry({ event: 'advanced-proc-error', id, error: err.message });
+                res({ success: false });
+              });
+              advProc.on('close', c => {
+                logEntry({ event: 'advanced-proc-close', id, code: c, stderr: ffmpegStderr.slice(-500) });
+                res({ success: c === 0 });
+              });
+            });
+
+            if (advResult.success && fs.existsSync(tmpOut)) {
+              fs.unlinkSync(mergedFile);
+              fs.renameSync(tmpOut, mergedFile);
+              mainWindow?.webContents.send('dl-progress', { id, line: 'Advanced processing complete' });
+              logEntry({ event: 'advanced-done', id, file: mergedFile });
+            } else {
+              try { fs.unlinkSync(tmpOut); } catch {}
+              mainWindow?.webContents.send('dl-progress', { id, line: 'Advanced processing failed — keeping original file' });
+              logEntry({ event: 'advanced-failed', id, file: mergedFile });
+            }
+          } else {
+            logEntry({ event: 'advanced-skip', id, reason: 'needsAdvanced is false' });
+          }
+        } catch (advErr) {
+          logEntry({ event: 'advanced-exception', id, error: advErr.message, stack: advErr.stack });
+        }
+      }
+
+      if (type === 'mp3' && advanced && advanced.hardLimiter && mergedFile && binaryOk(FFMPEG) && fs.existsSync(mergedFile)) {
+        mainWindow?.webContents.send('dl-progress', { id, line: 'Applying -12dB hard limiter...' });
+        const tmpMp3 = mergedFile.replace(/\.mp3$/i, '_limited.mp3');
+        const limResult = await new Promise((res) => {
+          let limProc;
+          try {
+            limProc = spawn(FFMPEG, [
+              '-i', mergedFile,
+              '-af', 'alimiter=limit=0.251189:level=0',
+              '-c:v', 'copy', '-y', tmpMp3
+            ], { windowsHide: true });
+          } catch (e) { res({ success: false }); return; }
+          limProc.on('error', () => res({ success: false }));
+          limProc.on('close', c => res({ success: c === 0 }));
+        });
+        if (limResult.success && fs.existsSync(tmpMp3)) {
+          fs.unlinkSync(mergedFile);
+          fs.renameSync(tmpMp3, mergedFile);
+          logEntry({ event: 'mp3-limiter-done', id });
+        } else {
+          try { fs.unlinkSync(tmpMp3); } catch {}
+        }
+      }
+
       resolve({ success: true });
     });
   });
@@ -989,17 +1252,15 @@ ipcMain.handle('download-app-update', (_e, downloadUrl) => {
           fileStream.close(() => {
             send(100);
             logEntry({ event: 'app-update-downloaded', tmpPath });
-            // Launch the installer and quit
-            try {
-              spawn(tmpPath, ['/S'], { detached: true, stdio: 'ignore', shell: true }).unref();
-              setTimeout(() => app.quit(), 1500);
-              resolve({ success: true });
-            } catch (err) {
-              // If silent install fails, just open the file for manual install
-              shell.openPath(tmpPath);
-              setTimeout(() => app.quit(), 1500);
-              resolve({ success: true });
-            }
+            app.once('quit', () => {
+              try {
+                spawn(tmpPath, ['/S'], { detached: true, stdio: 'ignore', shell: true }).unref();
+              } catch {
+                require('child_process').exec(`start "" "${tmpPath}"`);
+              }
+            });
+            resolve({ success: true });
+            app.quit();
           });
         });
       }).on('error', err => {
@@ -1009,6 +1270,12 @@ ipcMain.handle('download-app-update', (_e, downloadUrl) => {
     };
     followRedirect(downloadUrl, 0);
   });
+});
+
+// ─── Advanced features: font check ──────────────────────────────────────────
+ipcMain.handle('check-font', () => {
+  const fontPath = resolveFontPath();
+  return { available: !!fontPath, fontPath: fontPath || '' };
 });
 
 // ─── Diagnostics ─────────────────────────────────────────────────────────────

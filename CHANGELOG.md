@@ -1,5 +1,28 @@
 # Changelog
 
+## v2.2.0 (2026-03-17)
+
+### New Features
+- **Advanced Post-Processing Panel** — New expandable panel in the main UI with individual toggles for each feature. Enabling Advanced mode auto-activates instant download.
+- **16:9 Blur Pillarbox** — Adds a blurred, scaled background behind non-widescreen content to fill 1280x720 without letterboxing or cropping. Now user-controlled via toggle.
+- **Source Bug Overlay** — Broadcast-style "SOURCE: [NAME]" badge in the top-left corner using ITC Avant Garde Gothic LT Bold. Dynamically sized blue box with white accent bar. Supports apostrophes and special characters.
+- **Trim (In/Out Points)** — Cut downloaded videos with start and end timestamps using FFmpeg input-side seeking. Accepts HH:MM:SS, SS, or SS.ms formats.
+- **-12dB Hard Limiter** — True brick-wall audio limiter (FFmpeg `alimiter`) that hard-caps audio at -12dB, matching Premiere Pro behavior. Works on both MP4 and MP3 downloads.
+- **Custom Filename** — Name your downloads anything you want. Extension is added automatically.
+- **Changelog / What's New** — Version upgrade popup now includes a "What's New" section showing recent changes.
+
+### Bug Fixes
+- **App update restart** — Fixed the self-update flow so the installer launches reliably after the app quits, instead of racing with the running process.
+- **Download file detection** — Improved detection of the output file path after download. Falls back to finding the newest MP4 in the download folder when yt-dlp's output path doesn't match the actual file on disk.
+- **Font bundling** — Font file is now resolved dynamically at runtime with fallback paths for both dev and packaged builds. Source bug overlay is automatically disabled with a warning if the font is missing.
+
+### Other Changes
+- All advanced FFmpeg features combine into a single pass — no intermediate files.
+- Fonts directory added to `extraResources` for production builds.
+- Advanced panel removed from quality picker modal for cleaner UX.
+
+---
+
 ## v2.1.1 (2026-03-16)
 
 ### Bug Fixes
