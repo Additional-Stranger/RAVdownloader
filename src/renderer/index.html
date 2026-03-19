@@ -656,11 +656,27 @@ html, body { height: 100%; overflow: hidden; background: var(--bg); color: var(-
 
           <div class="adv-feature-row">
             <label class="toggle-wrap">
-              <input type="checkbox" id="adv-blur-toggle"/>
+              <input type="checkbox" id="adv-vo-toggle"/>
+              <div class="toggle"></div>
+              <span class="toggle-label">VO (download with no audio)</span>
+            </label>
+            <div class="adv-hint" style="margin-left:44px">Downloads video only — no audio track will be included</div>
+          </div>
+
+          <div class="adv-feature-row">
+            <label class="toggle-wrap">
+              <input type="checkbox" id="adv-blur-toggle" onchange="document.getElementById('adv-blur-slider-body').style.display=this.checked?'':'none'"/>
               <div class="toggle"></div>
               <span class="toggle-label">16:9 Blur Pillarbox</span>
             </label>
             <div class="adv-hint" style="margin-left:44px">Adds blurred background fill for non-16:9 content</div>
+            <div class="adv-feature-body" id="adv-blur-slider-body" style="display:none">
+              <div class="adv-row" style="gap:12px">
+                <span style="font-size:11px;color:var(--text3);font-family:var(--mono);min-width:28px" id="adv-blur-value">12%</span>
+                <input type="range" id="adv-blur-amount" min="1" max="50" value="12" style="flex:1;accent-color:var(--accent);cursor:pointer" oninput="document.getElementById('adv-blur-value').textContent=this.value+'%'"/>
+              </div>
+              <div class="adv-hint">Blur intensity (default 12%)</div>
+            </div>
           </div>
 
           <div class="adv-feature-row">
@@ -884,6 +900,13 @@ Click "Check &amp; Update" to begin.</div>
           </div>
           <div class="settings-row">
             <div class="sr-left">
+              <div class="sr-label">Report an Issue</div>
+              <div class="sr-desc">Email the developer about a bug or failed download</div>
+            </div>
+            <button class="btn btn-ghost" onclick="openReportIssue()">Report Issue</button>
+          </div>
+          <div class="settings-row">
+            <div class="sr-left">
               <div class="sr-label">Diagnostics</div>
               <div class="sr-desc">Check binary paths — use this if yt-dlp shows "not found"</div>
             </div>
@@ -992,17 +1015,16 @@ Click "Check &amp; Update" to begin.</div>
         <div class="welcome-step-title">What's New</div>
       </div>
       <div class="welcome-step-desc" style="line-height:1.6" id="changelog-content">
-        <strong>Advanced Post-Processing</strong><br/>
-        &bull; 16:9 Blur Pillarbox — blurred background for non-widescreen content<br/>
-        &bull; Source Bug Overlay — broadcast-style SOURCE tag in top-left<br/>
-        &bull; Trim — cut videos with start/end timestamps<br/>
-        &bull; -12dB Hard Limiter — prevents audio clipping (like Premiere)<br/>
-        &bull; Custom Filename — name your downloads anything you want<br/>
+        <strong>New Features</strong><br/>
+        &bull; Video Only (VO) — download video with no audio track<br/>
+        &bull; Adjustable Blur Intensity — slider to control pillarbox blur (1–50%)<br/>
+        &bull; Report Issue — send bug reports with logs directly from the app<br/>
         <br/>
-        <strong>Improvements</strong><br/>
-        &bull; Each advanced feature has its own toggle<br/>
-        &bull; Advanced mode auto-enables instant download<br/>
-        &bull; Improved update restart reliability
+        <strong>Fixes</strong><br/>
+        &bull; YouTube downloads now work without logging in<br/>
+        &bull; Downloads no longer fail if file already exists<br/>
+        &bull; Stuck downloads auto-timeout after 5 min of no progress<br/>
+        &bull; Clearer update-complete messaging
       </div>
     </div>
 
@@ -1043,12 +1065,36 @@ Click "Check &amp; Update" to begin.</div>
       <div style="height:6px;background:var(--bg4);border-radius:99px;overflow:hidden">
         <div id="app-update-bar" style="height:100%;background:var(--accent);border-radius:99px;transition:width 0.3s;width:0%"></div>
       </div>
-      <div id="app-update-status" style="font-size:11px;font-family:var(--mono);color:var(--text3);margin-top:6px">Downloading...</div>
+      <div id="app-update-status" style="font-size:11px;font-family:var(--mono);color:var(--text3);margin-top:6px">Downloading update...</div>
     </div>
     <div class="up-btns" id="app-update-btns">
       <button style="flex:1;padding:12px;border-radius:var(--radius-sm);border:none;font-family:var(--font);font-size:14px;font-weight:700;cursor:pointer;background:var(--bg3);color:var(--text2);border:1px solid var(--border)" onclick="dismissAppUpdate()">Skip</button>
       <button style="flex:1;padding:12px;border-radius:var(--radius-sm);border:none;font-family:var(--font);font-size:14px;font-weight:700;cursor:pointer;background:var(--accent);color:#000" id="app-update-download-btn" onclick="startAppUpdate()">Update (Recommended)</button>
     </div>
+  </div>
+</div>
+
+<!-- ── REPORT ISSUE MODAL ── -->
+<div class="modal-overlay" id="report-modal">
+  <div class="modal" style="width:480px">
+    <div class="modal-header">
+      <div class="modal-title">Report an Issue</div>
+      <button class="modal-close" onclick="closeModal('report-modal')">&#10005;</button>
+    </div>
+    <div style="margin-bottom:16px">
+      <label style="font-size:12px;font-weight:600;color:var(--text2);display:block;margin-bottom:6px">Link that failed (optional)</label>
+      <input type="text" id="report-url" class="adv-input" style="width:100%" placeholder="https://youtube.com/watch?v=..." autocomplete="off" spellcheck="false"/>
+    </div>
+    <div style="margin-bottom:16px">
+      <label style="font-size:12px;font-weight:600;color:var(--text2);display:block;margin-bottom:6px">Describe the problem</label>
+      <textarea id="report-description" style="width:100%;min-height:100px;background:var(--bg4);border:1px solid var(--border);border-radius:6px;color:var(--text);font-family:var(--font);font-size:13px;padding:10px;outline:none;resize:vertical" placeholder="What happened? What did you expect?"></textarea>
+    </div>
+    <div style="font-size:11px;color:var(--text3);margin-bottom:16px;font-family:var(--mono)">Recent logs will be included automatically to help diagnose the issue.</div>
+    <div style="display:flex;gap:10px">
+      <button class="btn btn-ghost" style="flex:1" onclick="closeModal('report-modal')">Cancel</button>
+      <button class="btn btn-primary" style="flex:1" id="report-submit-btn" onclick="submitReport()">Send Report</button>
+    </div>
+    <div id="report-status" style="display:none;font-size:12px;font-family:var(--mono);margin-top:12px;text-align:center"></div>
   </div>
 </div>
 
@@ -1115,6 +1161,17 @@ async function init() {
   const isNewVersion = settings.lastSeenVersion !== appInfo.version;
   if (isNewVersion) {
     document.getElementById('welcome-path').textContent = settings.downloadPath || 'Default (Downloads/RAVdownloader)';
+    // Check actual auth status for welcome screen
+    api.youtubeAuthStatus().then(status => {
+      const statusEl = document.getElementById('welcome-auth-status');
+      const loginBtn = document.getElementById('welcome-login-btn');
+      if (status.loggedIn && settings.youtubeAuth === 'enabled') {
+        statusEl.textContent = status.email ? 'Signed in as ' + status.email : 'Signed in';
+        statusEl.className = 'welcome-auth-status logged-in';
+        loginBtn.textContent = 'Signed in';
+        loginBtn.disabled = true;
+      }
+    });
     setTimeout(() => document.getElementById('welcome-modal').classList.add('open'), 300);
   } else {
     // Check for yt-dlp updates in background
@@ -1134,7 +1191,7 @@ async function init() {
     const bar = document.getElementById('app-update-bar');
     const status = document.getElementById('app-update-status');
     if (bar) bar.style.width = pct + '%';
-    if (status) status.textContent = pct >= 100 ? 'Installing... app will restart' : `Downloading... ${pct}%`;
+    if (status) status.textContent = pct >= 100 ? 'Wait up to a minute for update to complete, then re-open the application' : `Downloading... ${pct}%`;
   });
 }
 init();
@@ -1221,7 +1278,7 @@ function renderQueue() {
           </div>
           <div id="pt-${item.id}" style="font-size:10px;color:var(--text3);font-family:var(--mono);margin-top:3px">${item.progressText || 'Starting…'}</div>
         ` : ''}
-        ${item.status === 'error' && item.logLines ? `<div style="font-size:10px;color:var(--red);font-family:var(--mono);margin-top:3px;max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${(item.logLines.slice(-1)[0]||'').replace(/"/g,"'")}">⚠ ${(item.logLines.slice(-1)[0]||'Download failed').slice(0,80)}</div>` : ''}
+        ${item.status === 'error' && item.logLines ? `<div style="font-size:10px;color:var(--red);font-family:var(--mono);margin-top:3px;max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${(item.logLines.slice(-1)[0]||'').replace(/"/g,"'")}">⚠ ${(item.logLines.slice(-1)[0]||'Download failed').slice(0,80)}</div><button onclick="openReportIssue('${item.url.replace(/'/g,"\\'")}','${(item.logLines.slice(-1)[0]||'').replace(/'/g,"\\'").slice(0,200)}')" style="font-size:10px;color:var(--orange);background:rgba(255,170,71,0.1);border:1px solid rgba(255,170,71,0.25);border-radius:4px;padding:2px 8px;cursor:pointer;margin-top:4px;font-family:var(--mono)">Report Issue</button>` : ''}
       </td>
       <td class="td-actions">${actionBtns}</td>
     </tr>`;
@@ -1493,7 +1550,11 @@ function getAdvancedOptions() {
     if (name && fontAvailable) opts.sourceName = name;
   }
 
-  if (document.getElementById('adv-blur-toggle').checked) opts.blurPillarbox = true;
+  if (document.getElementById('adv-vo-toggle').checked) opts.videoOnly = true;
+  if (document.getElementById('adv-blur-toggle').checked) {
+    opts.blurPillarbox = true;
+    opts.blurAmount = parseInt(document.getElementById('adv-blur-amount').value) || 12;
+  }
   if (document.getElementById('adv-limiter-toggle').checked) opts.hardLimiter = true;
 
   if (document.getElementById('adv-filename-toggle').checked) {
@@ -1868,13 +1929,16 @@ async function startAppUpdate() {
   progressArea.style.display = '';
 
   const result = await api.downloadAppUpdate(appUpdateDownloadUrl);
-  if (!result.success) {
+  if (result && result.success) {
+    document.getElementById('app-update-status').textContent = 'Wait up to a minute for update to complete, then re-open the application';
+    document.getElementById('app-update-bar').style.width = '100%';
+    btn.textContent = 'Closing...';
+  } else if (result) {
     document.getElementById('app-update-status').textContent = 'Failed: ' + result.error;
     document.getElementById('app-update-bar').style.background = 'var(--red)';
     btn.textContent = 'Retry';
     btn.disabled = false;
   }
-  // If success, the app will quit and installer will run
 }
 
 // ──────────────────────────────────────────────────────────────
@@ -1952,6 +2016,57 @@ async function updateAuthStatus() {
     loginBtn.style.display = '';
     logoutBtn.style.display = 'none';
     accountInfo.style.display = 'none';
+  }
+}
+
+// ── Report Issue ─────────────────────────────────────────────
+function openReportIssue(failedUrl, errorDetails) {
+  document.getElementById('report-url').value = failedUrl || '';
+  document.getElementById('report-description').value = errorDetails ? 'Error: ' + errorDetails : '';
+  document.getElementById('report-status').style.display = 'none';
+  document.getElementById('report-submit-btn').disabled = false;
+  document.getElementById('report-submit-btn').textContent = 'Send Report';
+  openModal('report-modal');
+}
+
+async function submitReport() {
+  const btn = document.getElementById('report-submit-btn');
+  const statusEl = document.getElementById('report-status');
+  const failedUrl = document.getElementById('report-url').value.trim();
+  const description = document.getElementById('report-description').value.trim();
+
+  if (!description && !failedUrl) {
+    statusEl.style.display = 'block';
+    statusEl.style.color = 'var(--red)';
+    statusEl.textContent = 'Please enter a URL or describe the problem';
+    return;
+  }
+
+  btn.disabled = true;
+  btn.textContent = 'Sending...';
+  statusEl.style.display = 'block';
+  statusEl.style.color = 'var(--text3)';
+  statusEl.textContent = 'Submitting report...';
+
+  try {
+    const result = await api.submitReport({ failedUrl, description });
+    if (result.success) {
+      statusEl.style.color = 'var(--green)';
+      statusEl.textContent = 'Report sent — thank you!';
+      btn.textContent = 'Sent';
+      setTimeout(() => closeModal('report-modal'), 2000);
+      showToast('Issue report sent — thank you!', 'success');
+    } else {
+      statusEl.style.color = 'var(--red)';
+      statusEl.textContent = 'Failed to send: ' + (result.error || 'Unknown error');
+      btn.textContent = 'Retry';
+      btn.disabled = false;
+    }
+  } catch (e) {
+    statusEl.style.color = 'var(--red)';
+    statusEl.textContent = 'Failed to send: ' + e.message;
+    btn.textContent = 'Retry';
+    btn.disabled = false;
   }
 }
 

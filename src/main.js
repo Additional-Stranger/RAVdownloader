@@ -6,8 +6,8 @@ const https = require('https');
 const http  = require('http');
 
 // ─── App info ────────────────────────────────────────────────────────────────
-const APP_VERSION = '2.2.0';
-const APP_VERSION_DATE = '3-17-26';
+const APP_VERSION = '2.3.0';
+const APP_VERSION_DATE = '3-19-26';
 // URL to a JSON file you host: { "version": "2.1.0", "downloadUrl": "https://..." }
 const APP_UPDATE_URL = 'https://ravdownloader-update.djcolinchristy.workers.dev/';
 
@@ -137,7 +137,7 @@ function escapeFFmpegText(text) {
 }
 
 // ─── FFmpeg command builder (Advanced features) ────────────────────────────
-function buildAdvancedFFmpegArgs({ inputPath, outputPath, trim, sourceName, fontPath, videoWidth, videoHeight, blurPillarbox, hardLimiter }) {
+function buildAdvancedFFmpegArgs({ inputPath, outputPath, trim, sourceName, fontPath, videoWidth, videoHeight, blurPillarbox, blurAmount, hardLimiter }) {
   const args = [];
 
   // Trim: input-side seek flags (before -i for fast seeking)
@@ -159,7 +159,8 @@ function buildAdvancedFFmpegArgs({ inputPath, outputPath, trim, sourceName, font
     let lastLabel;
 
     if (needsBlur) {
-      filterParts.push(`[0:v]scale=1280:720:force_original_aspect_ratio=increase,crop=1280:720,gblur=sigma=20[bg]`);
+      const sigma = Math.round((blurAmount || 12) * 20 / 12);
+      filterParts.push(`[0:v]scale=1280:720:force_original_aspect_ratio=increase,crop=1280:720,gblur=sigma=${sigma}[bg]`);
       filterParts.push(`[0:v]scale=1280:720:force_original_aspect_ratio=decrease[fg]`);
       filterParts.push(`[bg][fg]overlay=(W-w)/2:(H-h)/2[composed]`);
       lastLabel = 'composed';
@@ -446,7 +447,11 @@ ipcMain.handle('get-formats', async (_e, url) => {
     '--extractor-args', 'youtube:skip=translated_subs',
   ];
   const cookiesPath = getActiveCookiesPath();
-  if (cookiesPath) fmtArgs.push('--cookies', cookiesPath);
+  if (cookiesPath) {
+    fmtArgs.push('--cookies', cookiesPath);
+  } else if (url.includes('youtube.com') || url.includes('youtu.be')) {
+    fmtArgs.push('--extractor-args', 'youtube:player_client=web,default');
+  }
   fmtArgs.push(url);
 
   const { stdout, stderr, code } = await runExe(YTDLP, fmtArgs, 60000);
@@ -512,6 +517,7 @@ ipcMain.handle('start-download', async (_e, { id, url, type, formatId, bandwidth
       '--ffmpeg-location', BIN_DIR,
       '-o', path.join(dlPath, filenameTemplate),
       '--no-playlist', '--newline',
+      '--force-overwrites',
     );
   } else {
     if (!binaryOk(FFMPEG)) {
@@ -520,13 +526,22 @@ ipcMain.handle('start-download', async (_e, { id, url, type, formatId, bandwidth
     const filenameTemplate = (advanced && advanced.customFilename)
       ? advanced.customFilename + '.%(ext)s'
       : '%(title)s - %(height)sp.%(ext)s';
-    const fmt = formatId || 'bestvideo[vcodec^=avc1]+bestaudio[acodec^=mp4a]/bestvideo[vcodec^=avc1]+bestaudio/bestvideo+bestaudio/best*[ext=mp4]/best*';
+    let fmt;
+    if (advanced && advanced.videoOnly) {
+      // Video only — strip audio portion from format string
+      fmt = formatId
+        ? formatId.replace(/\+bestaudio[^\s/]*/g, '').replace(/\/+/g, '/')
+        : 'bestvideo[vcodec^=avc1]/bestvideo/best*[ext=mp4]/best*';
+    } else {
+      fmt = formatId || 'bestvideo[vcodec^=avc1]+bestaudio[acodec^=mp4a]/bestvideo[vcodec^=avc1]+bestaudio/bestvideo+bestaudio/best*[ext=mp4]/best*';
+    }
     args.push(
       '-f', fmt,
       '--merge-output-format', 'mp4',
       '--ffmpeg-location', BIN_DIR,
       '-o', path.join(dlPath, filenameTemplate),
       '--newline',
+      '--force-overwrites',
     );
     if (playlistStart || playlistEnd) {
       if (playlistStart) args.push('--playlist-start', String(playlistStart));
@@ -538,7 +553,12 @@ ipcMain.handle('start-download', async (_e, { id, url, type, formatId, bandwidth
 
   if (bandwidth && bandwidth > 0) args.push('-r', `${bandwidth}K`);
   const cookiesPath = getActiveCookiesPath();
-  if (cookiesPath) args.push('--cookies', cookiesPath);
+  if (cookiesPath) {
+    args.push('--cookies', cookiesPath);
+  } else if (url.includes('youtube.com') || url.includes('youtu.be')) {
+    // Fix for public non-age-restricted videos failing without auth
+    args.push('--extractor-args', 'youtube:player_client=web,default');
+  }
   args.push(url);
 
   logEntry({ event: 'download-start', id, url, type, formatId, cmd: [YTDLP, ...args].join(' ') });
@@ -558,8 +578,18 @@ ipcMain.handle('start-download', async (_e, { id, url, type, formatId, bandwidth
     activeProcs.set(id, proc);
     let stderrBuf = '';
     let mergedFile = '';
+    let lastOutputTime = Date.now();
+    const staleCheckTimer = setInterval(() => {
+      if (Date.now() - lastOutputTime > 300000) { // 5 min no output
+        clearInterval(staleCheckTimer);
+        try { proc.kill(); } catch {}
+        mainWindow?.webContents.send('dl-progress', { id, line: 'Download/merge timed out (no progress for 5 min)' });
+        logEntry({ event: 'download-stale-timeout', id });
+      }
+    }, 15000);
 
     proc.stdout.on('data', d => {
+      lastOutputTime = Date.now();
       d.toString().split('\n').forEach(line => {
         const l = line.trim();
         if (l) {
@@ -582,6 +612,7 @@ ipcMain.handle('start-download', async (_e, { id, url, type, formatId, bandwidth
     });
 
     proc.stderr.on('data', d => {
+      lastOutputTime = Date.now();
       const s = d.toString();
       stderrBuf += s;
       s.split('\n').forEach(line => {
@@ -591,12 +622,14 @@ ipcMain.handle('start-download', async (_e, { id, url, type, formatId, bandwidth
     });
 
     proc.on('error', err => {
+      clearInterval(staleCheckTimer);
       activeProcs.delete(id);
       logEntry({ event: 'download-spawn-error', id, error: err.message });
       resolve({ success: false, error: 'Spawn error: ' + err.message });
     });
 
     proc.on('close', async (code) => {
+      clearInterval(staleCheckTimer);
       activeProcs.delete(id);
       logEntry({ event: 'download-end', id, code, mergedFile, hasAdvanced: !!advanced, stderr: stderrBuf.slice(0, 500) });
       if (code !== 0) {
@@ -642,14 +675,25 @@ ipcMain.handle('start-download', async (_e, { id, url, type, formatId, bandwidth
                   '-y', tmpOut,
                 ], { windowsHide: true });
               } catch (e) { res({ success: false }); return; }
+              let lastActivity = Date.now();
+              const staleTimer = setInterval(() => {
+                if (Date.now() - lastActivity > 300000) { // 5 min no activity
+                  clearInterval(staleTimer);
+                  try { encProc.kill(); } catch {}
+                  mainWindow?.webContents.send('dl-progress', { id, line: 'Re-encode timed out (no progress for 5 min) — keeping original' });
+                  logEntry({ event: 'reencode-timeout', id });
+                  res({ success: false });
+                }
+              }, 10000);
               encProc.stderr.on('data', d => {
+                lastActivity = Date.now();
                 const progressLine = d.toString().trim();
                 if (progressLine.includes('frame=') || progressLine.includes('time=')) {
                   mainWindow?.webContents.send('dl-progress', { id, line: `Re-encoding: ${progressLine.slice(-80)}` });
                 }
               });
-              encProc.on('error', () => res({ success: false }));
-              encProc.on('close', c => res({ success: c === 0 }));
+              encProc.on('error', () => { clearInterval(staleTimer); res({ success: false }); });
+              encProc.on('close', c => { clearInterval(staleTimer); res({ success: c === 0 }); });
             });
             if (enc.success && fs.existsSync(tmpOut)) {
               fs.unlinkSync(mergedFile);
@@ -712,6 +756,7 @@ ipcMain.handle('start-download', async (_e, { id, url, type, formatId, bandwidth
               videoWidth: videoSize ? videoSize.width : 1280,
               videoHeight: videoSize ? videoSize.height : 720,
               blurPillarbox: advanced.blurPillarbox || false,
+              blurAmount: advanced.blurAmount || 12,
               hardLimiter: advanced.hardLimiter || false,
             });
             logEntry({ event: 'advanced-start', id, file: mergedFile, ffmpegArgs: [FFMPEG, ...ffmpegArgs].join(' ') });
@@ -726,7 +771,18 @@ ipcMain.handle('start-download', async (_e, { id, url, type, formatId, bandwidth
                 res({ success: false });
                 return;
               }
+              let lastActivity = Date.now();
+              const staleTimer = setInterval(() => {
+                if (Date.now() - lastActivity > 300000) { // 5 min no activity
+                  clearInterval(staleTimer);
+                  try { advProc.kill(); } catch {}
+                  mainWindow?.webContents.send('dl-progress', { id, line: 'Advanced processing timed out (no progress for 5 min) — keeping original' });
+                  logEntry({ event: 'advanced-timeout', id });
+                  res({ success: false });
+                }
+              }, 10000);
               advProc.stderr.on('data', d => {
+                lastActivity = Date.now();
                 const chunk = d.toString();
                 ffmpegStderr += chunk;
                 const progressLine = chunk.trim();
@@ -735,10 +791,12 @@ ipcMain.handle('start-download', async (_e, { id, url, type, formatId, bandwidth
                 }
               });
               advProc.on('error', (err) => {
+                clearInterval(staleTimer);
                 logEntry({ event: 'advanced-proc-error', id, error: err.message });
                 res({ success: false });
               });
               advProc.on('close', c => {
+                clearInterval(staleTimer);
                 logEntry({ event: 'advanced-proc-close', id, code: c, stderr: ffmpegStderr.slice(-500) });
                 res({ success: c === 0 });
               });
@@ -1256,11 +1314,11 @@ ipcMain.handle('download-app-update', (_e, downloadUrl) => {
               try {
                 spawn(tmpPath, ['/S'], { detached: true, stdio: 'ignore', shell: true }).unref();
               } catch {
-                require('child_process').exec(`start "" "${tmpPath}"`);
+                try { require('child_process').exec(`start "" "${tmpPath}"`); } catch {}
               }
             });
-            resolve({ success: true });
-            app.quit();
+            resolve({ success: true, installing: true });
+            setTimeout(() => app.quit(), 1500);
           });
         });
       }).on('error', err => {
@@ -1269,6 +1327,61 @@ ipcMain.handle('download-app-update', (_e, downloadUrl) => {
       });
     };
     followRedirect(downloadUrl, 0);
+  });
+});
+
+// ─── Report Issue (sends to worker endpoint) ────────────────────────────────
+const REPORT_URL = 'https://ravdownloader-update.djcolinchristy.workers.dev/report';
+
+ipcMain.handle('submit-report', (_e, { failedUrl, description }) => {
+  return new Promise((resolve) => {
+    // Gather recent log lines
+    let recentLogs = '';
+    try {
+      const date = new Date().toISOString().split('T')[0];
+      const logFile = path.join(LOG_DIR, `${date}.log`);
+      if (fs.existsSync(logFile)) {
+        const lines = fs.readFileSync(logFile, 'utf8').split('\n');
+        recentLogs = lines.slice(-50).join('\n');
+      }
+    } catch {}
+
+    const payload = JSON.stringify({
+      appVersion: APP_VERSION,
+      failedUrl: failedUrl || '',
+      description: description || '',
+      logs: recentLogs,
+      timestamp: new Date().toISOString(),
+    });
+
+    const url = new URL(REPORT_URL);
+    const options = {
+      hostname: url.hostname,
+      path: url.pathname,
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Content-Length': Buffer.byteLength(payload),
+        'User-Agent': 'RAVdownloader/' + APP_VERSION,
+      },
+    };
+
+    const req = https.request(options, (res) => {
+      let body = '';
+      res.on('data', d => body += d);
+      res.on('end', () => {
+        if (res.statusCode >= 200 && res.statusCode < 300) {
+          logEntry({ event: 'report-submitted', failedUrl });
+          resolve({ success: true });
+        } else {
+          resolve({ success: false, error: `Server responded with ${res.statusCode}` });
+        }
+      });
+    });
+    req.on('error', err => resolve({ success: false, error: err.message }));
+    req.setTimeout(15000, () => { req.destroy(); resolve({ success: false, error: 'Request timed out' }); });
+    req.write(payload);
+    req.end();
   });
 });
 

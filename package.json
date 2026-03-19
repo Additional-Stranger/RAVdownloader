@@ -1,6 +1,6 @@
 {
   "name": "ravdownloader",
-  "version": "2.2.0",
+  "version": "2.3.0",
   "description": "RAVdownloader by Colin - Premium Video Downloader",
   "main": "src/main.js",
   "scripts": {

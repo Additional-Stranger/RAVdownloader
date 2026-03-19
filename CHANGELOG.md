@@ -1,5 +1,21 @@
 # Changelog
 
+## v2.3.0 (2026-03-19)
+
+### New Features
+- **Video Only (VO) Mode** — Download video without any audio track. New toggle in the Advanced panel strips audio from the format selection.
+- **Adjustable Blur Intensity** — Pillarbox blur now has a slider (1–50%) so you can control how much the background is blurred. Defaults to 12%.
+- **Report Issue** — In-app bug reporting from Settings or directly from failed downloads. Automatically attaches recent logs and sends to the developer's Cloudflare Worker endpoint.
+
+### Bug Fixes
+- **YouTube downloads without auth** — Public (non-age-restricted) YouTube videos no longer fail when not logged in. Falls back to `web,default` player client automatically.
+- **Force overwrites** — Downloads no longer fail if a file with the same name already exists; yt-dlp now overwrites automatically.
+- **Stale download timeout** — Downloads and re-encodes that produce no output for 5 minutes are automatically killed instead of hanging forever.
+- **Update installer messaging** — Post-update status now clearly tells the user to wait and re-open the app, instead of the ambiguous "Installing... app will restart".
+- **Welcome screen auth status** — The welcome modal now checks and displays your actual YouTube login status on launch.
+
+---
+
 ## v2.2.0 (2026-03-17)
 
 ### New Features

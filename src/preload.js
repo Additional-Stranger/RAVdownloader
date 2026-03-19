@@ -60,6 +60,9 @@ contextBridge.exposeInMainWorld('api', {
   // Advanced features
   checkFont:      ()   => ipcRenderer.invoke('check-font'),
 
+  // Report issue
+  submitReport: (opts) => ipcRenderer.invoke('submit-report', opts || {}),
+
   // Logs & diagnostics
   getLogs:        () => ipcRenderer.invoke('get-logs'),
   getDiagnostics: () => ipcRenderer.invoke('get-diagnostics'),

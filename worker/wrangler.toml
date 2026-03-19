@@ -1,0 +1,9 @@
+name = "ravdownloader-update"
+main = "worker.js"
+compatibility_date = "2024-01-01"
+
+# KV namespace for storing issue reports
+# After creating (step 2 below), paste the id here
+[[kv_namespaces]]
+binding = "REPORTS"
+id = "f35f457904d04c679643d575260b1b2f"
