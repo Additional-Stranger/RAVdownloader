@@ -572,6 +572,10 @@ html, body { height: 100%; overflow: hidden; background: var(--bg); color: var(-
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M7 16V4m0 0L3 8m4-4l4 4M17 8v12m0 0l4-4m-4 4l-4-4"/></svg>
           Convert
         </button>
+        <button class="nav-btn" data-view="extractor" onclick="switchView(this)">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
+          Extractor
+        </button>
       </div>
       <div class="sidebar-section">
         <div class="sidebar-label">Tools</div>
@@ -782,6 +786,65 @@ html, body { height: 100%; overflow: hidden; background: var(--bg); color: var(-
           </div>
           <div class="convert-files-list" id="convert-files-list"></div>
           <button class="btn btn-primary" id="convert-start-btn" onclick="startConversion()" style="display:none;width:100%;padding:12px;font-size:14px">▶ Start Conversion</button>
+        </div>
+      </div>
+
+      <!-- ── EXTRACTOR VIEW ── -->
+      <div class="view" id="view-extractor">
+        <div class="page-header">
+          <div class="page-title">Extract <span>audio.</span></div>
+          <div class="page-subtitle">Drop in a video file and pull out the audio as MP3.</div>
+        </div>
+        <div class="card">
+          <div class="card-title">Source File</div>
+          <div class="convert-drop-zone" id="ext-drop-zone" onclick="pickExtractorFile()">
+            <div class="dz-icon">🎵</div>
+            <p id="ext-file-label">Click to select a video file</p>
+            <span>MP4, MOV, MKV, AVI, WEBM</span>
+          </div>
+        </div>
+        <div class="card" id="ext-options-card" style="display:none">
+          <div class="card-title">Options</div>
+          <div class="adv-feature-row">
+            <label class="toggle-wrap">
+              <input type="checkbox" id="ext-limiter-toggle"/>
+              <div class="toggle"></div>
+              <span class="toggle-label">-12dB Hard Limiter</span>
+            </label>
+            <div class="adv-hint" style="margin-left:44px">Prevents audio clipping (like Premiere Pro)</div>
+          </div>
+          <div class="adv-feature-row">
+            <label class="toggle-wrap">
+              <input type="checkbox" id="ext-trim-toggle" onchange="document.getElementById('ext-trim-body').style.display=this.checked?'':'none'"/>
+              <div class="toggle"></div>
+              <span class="toggle-label">Trim (In/Out Points)</span>
+            </label>
+            <div class="adv-hint" style="margin-left:44px">Cut audio with start and end timestamps</div>
+            <div class="adv-feature-body" id="ext-trim-body" style="display:none">
+              <div class="adv-row" style="gap:12px">
+                <input type="text" class="adv-input" id="ext-trim-start" placeholder="Start (e.g. 0:30)" spellcheck="false" autocomplete="off" style="flex:1"/>
+                <input type="text" class="adv-input" id="ext-trim-end" placeholder="End (e.g. 2:45)" spellcheck="false" autocomplete="off" style="flex:1"/>
+              </div>
+              <div class="adv-hint">Accepts HH:MM:SS, MM:SS, or seconds</div>
+              <div class="adv-error" id="ext-trim-error" style="display:none"></div>
+            </div>
+          </div>
+          <div class="adv-feature-row">
+            <label class="toggle-wrap">
+              <input type="checkbox" id="ext-filename-toggle" onchange="document.getElementById('ext-filename-body').style.display=this.checked?'':'none'"/>
+              <div class="toggle"></div>
+              <span class="toggle-label">Custom Filename</span>
+            </label>
+            <div class="adv-hint" style="margin-left:44px">Name your output file (extension added automatically)</div>
+            <div class="adv-feature-body" id="ext-filename-body" style="display:none">
+              <div class="adv-row">
+                <input type="text" class="adv-input" id="ext-filename-input" placeholder="my_audio" spellcheck="false" autocomplete="off" style="flex:1"/>
+                <span style="font-size:12px;color:var(--text3);font-family:var(--mono)">.mp3</span>
+              </div>
+            </div>
+          </div>
+          <button class="btn btn-primary" id="ext-start-btn" onclick="startExtraction()" style="width:100%;padding:12px;font-size:14px;margin-top:12px">▶ Extract Audio</button>
+          <div id="ext-status" style="display:none;font-size:12px;font-family:var(--mono);color:var(--text3);margin-top:10px;text-align:center"></div>
         </div>
       </div>
 
@@ -1015,16 +1078,14 @@ Click "Check &amp; Update" to begin.</div>
         <div class="welcome-step-title">What's New</div>
       </div>
       <div class="welcome-step-desc" style="line-height:1.6" id="changelog-content">
-        <strong>New Features</strong><br/>
-        &bull; Video Only (VO) — download video with no audio track<br/>
-        &bull; Adjustable Blur Intensity — slider to control pillarbox blur (1–50%)<br/>
-        &bull; Report Issue — send bug reports with logs directly from the app<br/>
+        <strong>New in v2.3.1</strong><br/>
+        &bull; Audio Extractor — pull MP3 from any video file<br/>
+        &bull; Hard limiter, trim, and custom filename for extractions<br/>
         <br/>
-        <strong>Fixes</strong><br/>
-        &bull; YouTube downloads now work without logging in<br/>
-        &bull; Downloads no longer fail if file already exists<br/>
-        &bull; Stuck downloads auto-timeout after 5 min of no progress<br/>
-        &bull; Clearer update-complete messaging
+        <strong>New in v2.3.0</strong><br/>
+        &bull; Video Only (VO) — download video with no audio track<br/>
+        &bull; Adjustable Blur Intensity — slider to control pillarbox blur<br/>
+        &bull; Report Issue — send bug reports with logs directly from the app
       </div>
     </div>
 
@@ -1750,6 +1811,92 @@ async function startConversion() {
     if (result.success) showToast(`Converted: ${f.path.split(/[/\\]/).pop()}`, 'success');
     else showToast(`Failed: ${result.error?.slice(0,60)}`, 'error');
   }
+}
+
+// ── Extractor ────────────────────────────────────────────────
+let extractorFilePath = null;
+
+async function pickExtractorFile() {
+  const files = await api.chooseFiles({
+    title: 'Select Video File',
+    filters: [{ name: 'Video Files', extensions: ['mp4','m4v','mov','mkv','avi','webm','flv','wmv','ts'] }]
+  });
+  if (files.length) {
+    extractorFilePath = files[0];
+    const name = extractorFilePath.split(/[/\\]/).pop();
+    document.getElementById('ext-file-label').textContent = name;
+    document.getElementById('ext-drop-zone').style.borderColor = 'var(--accent)';
+    document.getElementById('ext-options-card').style.display = '';
+  }
+}
+
+async function startExtraction() {
+  if (!extractorFilePath) return showToast('Select a video file first', 'error');
+
+  // Validate trim inputs
+  if (document.getElementById('ext-trim-toggle').checked) {
+    const startVal = document.getElementById('ext-trim-start').value.trim();
+    const endVal = document.getElementById('ext-trim-end').value.trim();
+    const errEl = document.getElementById('ext-trim-error');
+    errEl.style.display = 'none';
+    if (startVal) {
+      const s = parseTimeToSeconds(startVal);
+      if (s === null || isNaN(s)) { errEl.textContent = 'Invalid start time'; errEl.style.display = ''; return; }
+    }
+    if (endVal) {
+      const e = parseTimeToSeconds(endVal);
+      if (e === null || isNaN(e)) { errEl.textContent = 'Invalid end time'; errEl.style.display = ''; return; }
+    }
+    if (startVal && endVal) {
+      const s = parseTimeToSeconds(startVal), e = parseTimeToSeconds(endVal);
+      if (s >= e) { errEl.textContent = 'Start must be before end'; errEl.style.display = ''; return; }
+    }
+  }
+
+  const btn = document.getElementById('ext-start-btn');
+  const statusEl = document.getElementById('ext-status');
+  btn.disabled = true;
+  btn.textContent = 'Extracting...';
+  statusEl.style.display = '';
+  statusEl.textContent = 'Starting...';
+
+  const opts = { inputPath: extractorFilePath, outputDir: settings.downloadPath || null };
+
+  if (document.getElementById('ext-limiter-toggle').checked) opts.hardLimiter = true;
+
+  if (document.getElementById('ext-trim-toggle').checked) {
+    const start = document.getElementById('ext-trim-start').value.trim();
+    const end = document.getElementById('ext-trim-end').value.trim();
+    if (start || end) opts.trim = { start: start || undefined, end: end || undefined };
+  }
+
+  if (document.getElementById('ext-filename-toggle').checked) {
+    const name = document.getElementById('ext-filename-input').value.trim();
+    if (name) opts.customFilename = name;
+  }
+
+  api.onExtractProgress(msg => {
+    statusEl.textContent = msg;
+  });
+
+  try {
+    const result = await api.extractAudio(opts);
+    if (result.success) {
+      statusEl.style.color = 'var(--green)';
+      statusEl.textContent = 'Done! Saved to ' + result.outputPath.split(/[/\\]/).pop();
+      showToast('Audio extracted successfully', 'success');
+    } else {
+      statusEl.style.color = 'var(--red)';
+      statusEl.textContent = 'Failed: ' + (result.error || 'Unknown error').slice(0, 100);
+      showToast('Extraction failed', 'error');
+    }
+  } catch (e) {
+    statusEl.style.color = 'var(--red)';
+    statusEl.textContent = 'Error: ' + e.message;
+  }
+
+  btn.disabled = false;
+  btn.textContent = '▶ Extract Audio';
 }
 
 // ──────────────────────────────────────────────────────────────

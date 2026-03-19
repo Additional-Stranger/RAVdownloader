@@ -6,7 +6,7 @@ const https = require('https');
 const http  = require('http');
 
 // ─── App info ────────────────────────────────────────────────────────────────
-const APP_VERSION = '2.3.0';
+const APP_VERSION = '2.3.1';
 const APP_VERSION_DATE = '3-19-26';
 // URL to a JSON file you host: { "version": "2.1.0", "downloadUrl": "https://..." }
 const APP_UPDATE_URL = 'https://ravdownloader-update.djcolinchristy.workers.dev/';
@@ -1063,6 +1063,77 @@ ipcMain.handle('convert-file', (_e, { inputPath, outputFormat, outputDir }) => {
     proc.on('close', code => {
       logEntry({ event: 'convert', inputPath, outPath, code });
       resolve(code === 0 ? { success: true, outputPath: outPath } : { success: false, error: stderr.slice(-400) });
+    });
+  });
+});
+
+// ─── Extract audio from video file ───────────────────────────────────────────
+ipcMain.handle('extract-audio', (_e, { inputPath, hardLimiter, trim, customFilename, outputDir }) => {
+  return new Promise((resolve) => {
+    if (!binaryOk(FFMPEG)) return resolve({ success: false, error: 'ffmpeg not found' });
+    if (!inputPath || !fs.existsSync(inputPath)) return resolve({ success: false, error: 'Input file not found' });
+
+    const baseName = customFilename || path.basename(inputPath, path.extname(inputPath)) + '_audio';
+    const outDir = outputDir || path.dirname(inputPath);
+    ensureDir(outDir);
+    const outPath = path.join(outDir, baseName + '.mp3');
+
+    const args = [];
+
+    // Trim: input-side seek (before -i for fast seeking)
+    if (trim) {
+      if (trim.start) args.push('-ss', trim.start);
+      if (trim.end) args.push('-to', trim.end);
+    }
+
+    args.push('-i', inputPath);
+    args.push('-vn'); // no video
+
+    // Audio codec — high quality VBR MP3
+    args.push('-codec:a', 'libmp3lame', '-q:a', '0');
+
+    // Hard limiter
+    if (hardLimiter) {
+      args.push('-af', 'alimiter=limit=0.251189:level=0');
+    }
+
+    args.push('-y', outPath);
+
+    logEntry({ event: 'extract-audio-start', inputPath, outPath, hardLimiter, trim });
+    mainWindow?.webContents.send('extract-progress', 'Extracting audio...');
+
+    let proc;
+    try {
+      proc = spawn(FFMPEG, args, { windowsHide: true });
+    } catch (err) {
+      return resolve({ success: false, error: err.message });
+    }
+
+    let stderr = '';
+    proc.stderr.on('data', d => {
+      const chunk = d.toString();
+      stderr += chunk;
+      const line = chunk.trim();
+      if (line.includes('time=') || line.includes('size=')) {
+        const timeMatch = line.match(/time=(\S+)/);
+        mainWindow?.webContents.send('extract-progress', 'Extracting: ' + (timeMatch ? timeMatch[1] : line.slice(-60)));
+      }
+    });
+
+    proc.on('error', err => {
+      logEntry({ event: 'extract-audio-error', error: err.message });
+      resolve({ success: false, error: err.message });
+    });
+
+    proc.on('close', code => {
+      logEntry({ event: 'extract-audio-done', code, outPath });
+      if (code === 0 && fs.existsSync(outPath)) {
+        mainWindow?.webContents.send('extract-progress', 'Done!');
+        resolve({ success: true, outputPath: outPath });
+      } else {
+        mainWindow?.webContents.send('extract-progress', 'Failed');
+        resolve({ success: false, error: stderr.slice(-400) });
+      }
     });
   });
 });

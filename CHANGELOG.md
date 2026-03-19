@@ -1,5 +1,12 @@
 # Changelog
 
+## v2.3.1 (2026-03-19)
+
+### New Features
+- **Audio Extractor Tab** — New sidebar tab to extract audio from any video file (MP4, MOV, MKV, AVI, WEBM) as high-quality VBR MP3. Includes optional -12dB hard limiter, trim with start/end timestamps, and custom filename.
+
+---
+
 ## v2.3.0 (2026-03-19)
 
 ### New Features

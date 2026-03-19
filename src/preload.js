@@ -51,6 +51,13 @@ contextBridge.exposeInMainWorld('api', {
   chooseFiles:  (opts)  => ipcRenderer.invoke('choose-files', opts),
   convertFile:  (opts)  => ipcRenderer.invoke('convert-file', opts),
 
+  // Audio extractor
+  extractAudio: (opts)  => ipcRenderer.invoke('extract-audio', opts),
+  onExtractProgress: (cb) => {
+    ipcRenderer.removeAllListeners('extract-progress');
+    ipcRenderer.on('extract-progress', (_e, msg) => cb(msg));
+  },
+
   // YouTube account
   youtubeLogin:        ()  => ipcRenderer.invoke('youtube-login'),
   youtubeLogout:       ()  => ipcRenderer.invoke('youtube-logout'),
