@@ -67,6 +67,14 @@ contextBridge.exposeInMainWorld('api', {
   // Advanced features
   checkFont:      ()   => ipcRenderer.invoke('check-font'),
 
+  // Lower Third Generator
+  getLtFiles:          ()     => ipcRenderer.invoke('get-lt-files'),
+  generateLowerThird:  (opts) => ipcRenderer.invoke('generate-lower-third', opts),
+  onLtProgress: (cb) => {
+    ipcRenderer.removeAllListeners('lt-progress');
+    ipcRenderer.on('lt-progress', (_e, msg) => cb(msg));
+  },
+
   // Report issue
   submitReport: (opts) => ipcRenderer.invoke('submit-report', opts || {}),
 

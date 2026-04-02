@@ -541,6 +541,61 @@ html, body { height: 100%; overflow: hidden; background: var(--bg); color: var(-
   transform: scale(0.95) translateY(8px); transition: transform 0.25s cubic-bezier(0.34,1.56,0.64,1);
 }
 .app-update-overlay.open .app-update-popup { transform: scale(1) translateY(0); }
+
+/* ── Lower Third Generator ── */
+.lt-preview-wrap {
+  position: relative; width: 100%; padding-top: 56.25%; /* 16:9 */
+  background: #000; border-radius: var(--radius-sm); overflow: hidden;
+  border: 1px solid var(--border);
+}
+.lt-preview-wrap canvas {
+  position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+}
+.lt-field-group { margin-bottom: 16px; }
+.lt-field-group:last-child { margin-bottom: 0; }
+.lt-field-label { font-size: 11px; font-weight: 600; letter-spacing: 0.06em; color: var(--text3); text-transform: uppercase; margin-bottom: 6px; }
+.lt-text-input {
+  width: 100%; background: var(--bg4); border: 1px solid var(--border); border-radius: 6px;
+  color: var(--text); font-family: var(--font); font-size: 14px; padding: 10px 12px; outline: none;
+}
+.lt-text-input:focus { border-color: var(--accent); }
+.lt-text-input::placeholder { color: var(--text3); }
+.lt-size-row {
+  display: flex; align-items: center; gap: 10px; margin-top: 6px;
+}
+.lt-size-input {
+  width: 64px; background: var(--bg4); border: 1px solid var(--border); border-radius: 6px;
+  color: var(--text); font-family: var(--mono); font-size: 12px; padding: 5px 8px; outline: none; text-align: center;
+}
+.lt-size-input:focus { border-color: var(--accent); }
+.lt-size-slider {
+  flex: 1; accent-color: var(--accent); cursor: pointer; height: 4px;
+}
+.lt-reset-btn {
+  padding: 4px 10px; border-radius: 5px; border: 1px solid var(--border); background: var(--bg3);
+  color: var(--text3); font-family: var(--mono); font-size: 10px; cursor: pointer; transition: all 0.15s; white-space: nowrap;
+}
+.lt-reset-btn:hover { color: var(--accent); border-color: var(--accent); }
+.lt-reset-btn.disabled { opacity: 0.3; pointer-events: none; }
+.lt-duration-row {
+  display: flex; align-items: center; gap: 12px; margin-bottom: 12px;
+}
+.lt-duration-input {
+  width: 72px; background: var(--bg4); border: 1px solid var(--border); border-radius: 6px;
+  color: var(--text); font-family: var(--mono); font-size: 13px; padding: 6px 10px; outline: none; text-align: center;
+}
+.lt-duration-input:focus { border-color: var(--accent); }
+.lt-duration-note { font-size: 11px; color: var(--text3); font-family: var(--mono); }
+.lt-progress-wrap {
+  margin-top: 12px; display: none;
+}
+.lt-progress-bar { height: 6px; background: var(--bg4); border-radius: 99px; overflow: hidden; }
+.lt-progress-fill { height: 100%; background: var(--accent); border-radius: 99px; transition: width 0.3s; width: 0%; }
+.lt-progress-text { font-size: 11px; font-family: var(--mono); color: var(--text3); margin-top: 6px; }
+.lt-error-msg { font-size: 12px; font-family: var(--mono); color: var(--red); margin-top: 8px; display: none; }
+.lt-adjust-row { display: flex; align-items: center; gap: 8px; margin-top: 6px; }
+.lt-adjust-label { font-size: 11px; color: var(--text3); font-family: var(--mono); min-width: 28px; }
+.lt-adjust-unit { font-size: 10px; color: var(--text3); font-family: var(--mono); }
 </style>
 </head>
 <body>
@@ -575,6 +630,10 @@ html, body { height: 100%; overflow: hidden; background: var(--bg); color: var(-
         <button class="nav-btn" data-view="extractor" onclick="switchView(this)">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
           Extractor
+        </button>
+        <button class="nav-btn" data-view="lowerthird" onclick="switchView(this)">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="14" width="20" height="7" rx="1"/><line x1="6" y1="17" x2="14" y2="17"/><line x1="6" y1="19" x2="11" y2="19"/></svg>
+          Lower Third
         </button>
       </div>
       <div class="sidebar-section">
@@ -848,6 +907,103 @@ html, body { height: 100%; overflow: hidden; background: var(--bg); color: var(-
         </div>
       </div>
 
+      <!-- ── LOWER THIRD VIEW ── -->
+      <div class="view" id="view-lowerthird">
+        <div class="page-header">
+          <div class="page-title">Lower Third <span>generator.</span></div>
+          <div class="page-subtitle">Create broadcast-ready lower third graphics with custom text.</div>
+        </div>
+
+        <div id="lt-error-banner" style="display:none;padding:14px 16px;background:rgba(255,74,74,0.08);border:1px solid rgba(255,74,74,0.25);border-radius:var(--radius-sm);margin-bottom:16px;font-size:13px;color:var(--red)"></div>
+
+        <div class="card">
+          <div class="card-title">Preview</div>
+          <div class="lt-preview-wrap">
+            <canvas id="lt-canvas" width="1920" height="1080"></canvas>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-title">Text</div>
+
+          <div class="lt-field-group">
+            <div class="lt-field-label">Line 1 (Headline)</div>
+            <input type="text" class="lt-text-input" id="lt-line1" placeholder="e.g. BREAKING NEWS..." spellcheck="false" autocomplete="off"/>
+            <div style="margin-top:6px">
+              <label class="toggle-wrap">
+                <input type="checkbox" id="lt-uppercase" checked onchange="updateLtPreview()"/>
+                <div class="toggle"></div>
+                <span class="toggle-label">Force Uppercase</span>
+              </label>
+            </div>
+          </div>
+
+          <div class="lt-field-group" style="margin-top:16px">
+            <div class="lt-field-label">Line 2 (Subtext)</div>
+            <input type="text" class="lt-text-input" id="lt-line2" placeholder="e.g. GETTR: @RealAmVoice | RUMBLE: @RealAmericasVoice" spellcheck="false" autocomplete="off"/>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-title">Adjust</div>
+
+          <div class="lt-field-group">
+            <div class="lt-field-label">Line 1</div>
+            <div class="lt-adjust-row">
+              <span class="lt-adjust-label">Size</span>
+              <input type="range" class="lt-size-slider" id="lt-size1-slider" min="16" max="120" value="70"/>
+              <input type="text" class="lt-size-input" id="lt-size1-input" value="70"/>
+              <span class="lt-adjust-unit">px</span>
+            </div>
+            <div class="lt-adjust-row">
+              <span class="lt-adjust-label">X</span>
+              <input type="number" class="lt-size-input" id="lt-x1-input" value="0" style="width:72px"/>
+              <span class="lt-adjust-unit">offset</span>
+              <span class="lt-adjust-label" style="margin-left:16px">Y</span>
+              <input type="number" class="lt-size-input" id="lt-y1-input" value="0" style="width:72px"/>
+              <span class="lt-adjust-unit">offset</span>
+            </div>
+          </div>
+
+          <div class="lt-field-group" style="margin-top:12px">
+            <div class="lt-field-label">Line 2</div>
+            <div class="lt-adjust-row">
+              <span class="lt-adjust-label">Size</span>
+              <input type="range" class="lt-size-slider" id="lt-size2-slider" min="12" max="80" value="40"/>
+              <input type="text" class="lt-size-input" id="lt-size2-input" value="40"/>
+              <span class="lt-adjust-unit">px</span>
+            </div>
+            <div class="lt-adjust-row">
+              <span class="lt-adjust-label">X</span>
+              <input type="number" class="lt-size-input" id="lt-x2-input" value="0" style="width:72px"/>
+              <span class="lt-adjust-unit">offset</span>
+              <span class="lt-adjust-label" style="margin-left:16px">Y</span>
+              <input type="number" class="lt-size-input" id="lt-y2-input" value="0" style="width:72px"/>
+              <span class="lt-adjust-unit">offset</span>
+            </div>
+          </div>
+
+          <button class="btn btn-ghost" onclick="ltResetDefaults()" style="margin-top:12px">Reset to Default</button>
+        </div>
+
+        <div class="card">
+          <div class="card-title">Export</div>
+          <div class="lt-duration-row">
+            <span style="font-size:13px;color:var(--text2);font-weight:500">Duration:</span>
+            <input type="number" class="lt-duration-input" id="lt-duration" value="60" min="1" max="3600"/>
+            <span style="font-size:12px;color:var(--text2)">seconds</span>
+            <span class="lt-duration-note" id="lt-duration-note">Actual: 64s (8 loops × 8s)</span>
+          </div>
+          <div class="adv-hint" style="margin-bottom:12px">Output: ProRes 4444 with alpha, 1920×1080. The 8-second animation is looped to fill duration (always rounds up to complete loops).</div>
+          <button class="btn btn-primary" id="lt-export-btn" onclick="startLtExport()" style="width:100%;padding:12px;font-size:14px">▶ Export Lower Third</button>
+          <div class="lt-progress-wrap" id="lt-progress-wrap">
+            <div class="lt-progress-bar"><div class="lt-progress-fill" id="lt-progress-fill"></div></div>
+            <div class="lt-progress-text" id="lt-progress-text">Starting...</div>
+          </div>
+          <div class="lt-error-msg" id="lt-export-error"></div>
+        </div>
+      </div>
+
       <!-- ── UPDATE VIEW ── -->
       <div class="view" id="view-update">
         <div class="page-header">
@@ -1078,14 +1234,13 @@ Click "Check &amp; Update" to begin.</div>
         <div class="welcome-step-title">What's New</div>
       </div>
       <div class="welcome-step-desc" style="line-height:1.6" id="changelog-content">
+        <strong>New in v2.4.0</strong><br/>
+        &bull; Lower Third Generator — create broadcast-ready lower thirds with custom text, live preview, and ProRes 4444 export with alpha<br/>
+        &bull; Adjustable font size and position controls with TriCaster-matched defaults<br/>
+        <br/>
         <strong>New in v2.3.1</strong><br/>
         &bull; Audio Extractor — pull MP3 from any video file<br/>
-        &bull; Hard limiter, trim, and custom filename for extractions<br/>
-        <br/>
-        <strong>New in v2.3.0</strong><br/>
-        &bull; Video Only (VO) — download video with no audio track<br/>
-        &bull; Adjustable Blur Intensity — slider to control pillarbox blur<br/>
-        &bull; Report Issue — send bug reports with logs directly from the app
+        &bull; Hard limiter, trim, and custom filename for extractions
       </div>
     </div>
 
@@ -1194,6 +1349,9 @@ async function init() {
 
   // Restore YouTube auth state
   updateAuthStatus();
+
+  // Init Lower Third Generator
+  initLowerThird();
 
   // Auto-download toggle → swap button appearance
   document.getElementById('auto-download-toggle').addEventListener('change', function() {
@@ -1897,6 +2055,192 @@ async function startExtraction() {
 
   btn.disabled = false;
   btn.textContent = '▶ Extract Audio';
+}
+
+// ──────────────────────────────────────────────────────────────
+// Lower Third Generator
+// ──────────────────────────────────────────────────────────────
+let ltFontLoaded = false;
+let ltBgImage = null;
+const LT_DEFAULT_SIZE1 = 70;
+const LT_DEFAULT_SIZE2 = 40;
+const LT_SIZE_OFFSET = -2;   // display 70/40 but render 68/38 to match TriCaster
+const LT_DEFAULT_X = 363;
+const LT_DEFAULT_Y1 = 857;
+const LT_DEFAULT_Y2 = 943;
+const LT_LINE_COLOR = '#000000';
+
+async function initLowerThird() {
+  const data = await api.getLtFiles();
+  const banner = document.getElementById('lt-error-banner');
+
+  if (data.error) {
+    banner.style.display = '';
+    banner.textContent = data.error;
+    document.getElementById('lt-export-btn').disabled = true;
+    return;
+  }
+  banner.style.display = 'none';
+
+  // Load font via FontFace API
+  try {
+    const font = new FontFace('AvantGardeLT', `url(${data.fontBase64})`, { weight: 'bold' });
+    await font.load();
+    document.fonts.add(font);
+    ltFontLoaded = true;
+  } catch (e) {
+    banner.style.display = '';
+    banner.textContent = 'Failed to load font: ' + e.message;
+  }
+
+  // Load PNG background
+  ltBgImage = new Image();
+  ltBgImage.onload = () => {
+    document.getElementById('lt-line1').value = 'NEW THIS MORNING...';
+    document.getElementById('lt-line2').value = 'GETTR: @RealAmVoice | RUMBLE: @RealAmericasVoice';
+    updateLtPreview();
+  };
+  ltBgImage.src = data.pngBase64;
+
+  // Wire up text inputs
+  document.getElementById('lt-line1').addEventListener('input', updateLtPreview);
+  document.getElementById('lt-line2').addEventListener('input', updateLtPreview);
+
+  // Wire up size sliders/inputs
+  const wireSize = (n) => {
+    const slider = document.getElementById('lt-size' + n + '-slider');
+    const input = document.getElementById('lt-size' + n + '-input');
+    slider.addEventListener('input', () => { input.value = slider.value; updateLtPreview(); });
+    input.addEventListener('change', () => {
+      let v = parseInt(input.value) || (n === 1 ? LT_DEFAULT_SIZE1 : LT_DEFAULT_SIZE2);
+      v = Math.max(parseInt(slider.min), Math.min(parseInt(slider.max), v));
+      input.value = v; slider.value = v; updateLtPreview();
+    });
+  };
+  wireSize(1);
+  wireSize(2);
+
+  // Wire up position offset inputs
+  ['lt-x1-input','lt-y1-input','lt-x2-input','lt-y2-input'].forEach(id => {
+    document.getElementById(id).addEventListener('input', updateLtPreview);
+  });
+
+  // Wire up duration input
+  document.getElementById('lt-duration').addEventListener('input', updateLtDurationNote);
+  updateLtDurationNote();
+
+  // Listen for export progress
+  api.onLtProgress(raw => {
+    try {
+      const d = JSON.parse(raw);
+      document.getElementById('lt-progress-fill').style.width = d.pct + '%';
+      document.getElementById('lt-progress-text').textContent = d.msg;
+    } catch {}
+  });
+}
+
+function ltResetDefaults() {
+  document.getElementById('lt-size1-slider').value = LT_DEFAULT_SIZE1;
+  document.getElementById('lt-size1-input').value = LT_DEFAULT_SIZE1;
+  document.getElementById('lt-size2-slider').value = LT_DEFAULT_SIZE2;
+  document.getElementById('lt-size2-input').value = LT_DEFAULT_SIZE2;
+  document.getElementById('lt-x1-input').value = 0;
+  document.getElementById('lt-y1-input').value = 0;
+  document.getElementById('lt-x2-input').value = 0;
+  document.getElementById('lt-y2-input').value = 0;
+  updateLtPreview();
+}
+
+function ltGetPositions() {
+  const size1 = (parseInt(document.getElementById('lt-size1-input').value) || LT_DEFAULT_SIZE1) + LT_SIZE_OFFSET;
+  const size2 = (parseInt(document.getElementById('lt-size2-input').value) || LT_DEFAULT_SIZE2) + LT_SIZE_OFFSET;
+  const x1 = LT_DEFAULT_X + (parseInt(document.getElementById('lt-x1-input').value) || 0);
+  const y1 = LT_DEFAULT_Y1 + (parseInt(document.getElementById('lt-y1-input').value) || 0);
+  const x2 = LT_DEFAULT_X + (parseInt(document.getElementById('lt-x2-input').value) || 0);
+  const y2 = LT_DEFAULT_Y2 + (parseInt(document.getElementById('lt-y2-input').value) || 0);
+  return { size1, size2, x1, y1, x2, y2 };
+}
+
+function updateLtPreview() {
+  const canvas = document.getElementById('lt-canvas');
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  ctx.clearRect(0, 0, 1920, 1080);
+
+  if (ltBgImage && ltBgImage.complete) {
+    ctx.drawImage(ltBgImage, 0, 0, 1920, 1080);
+  }
+
+  if (!ltFontLoaded) return;
+
+  const pos = ltGetPositions();
+
+  // Draw Line 1
+  let line1 = document.getElementById('lt-line1').value;
+  if (document.getElementById('lt-uppercase').checked) line1 = line1.toUpperCase();
+  if (line1) {
+    ctx.font = `bold ${pos.size1}px AvantGardeLT, sans-serif`;
+    ctx.fillStyle = LT_LINE_COLOR;
+    ctx.textBaseline = 'top';
+    ctx.fillText(line1, pos.x1, pos.y1);
+  }
+
+  // Draw Line 2
+  const line2 = document.getElementById('lt-line2').value;
+  if (line2) {
+    ctx.font = `bold ${pos.size2}px AvantGardeLT, sans-serif`;
+    ctx.fillStyle = LT_LINE_COLOR;
+    ctx.textBaseline = 'top';
+    ctx.fillText(line2, pos.x2, pos.y2);
+  }
+}
+
+function updateLtDurationNote() {
+  const dur = parseInt(document.getElementById('lt-duration').value) || 60;
+  const loops = Math.ceil(dur / 8);
+  const actual = loops * 8;
+  document.getElementById('lt-duration-note').textContent = `Actual: ${actual}s (${loops} loop${loops !== 1 ? 's' : ''} × 8s)`;
+}
+
+async function startLtExport() {
+  const line1 = document.getElementById('lt-line1').value;
+  const line2 = document.getElementById('lt-line2').value;
+  if (!line1 && !line2) { showToast('Enter text on at least one line', 'error'); return; }
+
+  const btn = document.getElementById('lt-export-btn');
+  const progressWrap = document.getElementById('lt-progress-wrap');
+  const errorEl = document.getElementById('lt-export-error');
+  const forceUppercase = document.getElementById('lt-uppercase').checked;
+  const pos = ltGetPositions();
+  const duration = parseInt(document.getElementById('lt-duration').value) || 60;
+
+  btn.disabled = true;
+  btn.textContent = 'Exporting...';
+  progressWrap.style.display = '';
+  errorEl.style.display = 'none';
+  document.getElementById('lt-progress-fill').style.width = '0%';
+  document.getElementById('lt-progress-text').textContent = 'Starting...';
+
+  try {
+    const result = await api.generateLowerThird({ line1, line2, fontSize1: pos.size1, fontSize2: pos.size2, x1: pos.x1, y1: pos.y1, x2: pos.x2, y2: pos.y2, duration, forceUppercase });
+    if (result.success) {
+      document.getElementById('lt-progress-fill').style.width = '100%';
+      document.getElementById('lt-progress-text').textContent = 'Done! Saved to ' + result.outputPath.split(/[/\\]/).pop();
+      showToast('Lower third exported successfully', 'success');
+    } else if (result.error === 'Export cancelled') {
+      progressWrap.style.display = 'none';
+    } else {
+      errorEl.style.display = '';
+      errorEl.textContent = 'Export failed: ' + (result.error || 'Unknown error').slice(0, 200);
+      showToast('Export failed', 'error');
+    }
+  } catch (e) {
+    errorEl.style.display = '';
+    errorEl.textContent = 'Error: ' + e.message;
+  }
+
+  btn.disabled = false;
+  btn.textContent = '▶ Export Lower Third';
 }
 
 // ──────────────────────────────────────────────────────────────

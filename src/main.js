@@ -6,8 +6,8 @@ const https = require('https');
 const http  = require('http');
 
 // ─── App info ────────────────────────────────────────────────────────────────
-const APP_VERSION = '2.3.1';
-const APP_VERSION_DATE = '3-19-26';
+const APP_VERSION = '2.4.0';
+const APP_VERSION_DATE = '4-2-26';
 // URL to a JSON file you host: { "version": "2.1.0", "downloadUrl": "https://..." }
 const APP_UPDATE_URL = 'https://ravdownloader-update.djcolinchristy.workers.dev/';
 
@@ -1132,6 +1132,152 @@ ipcMain.handle('extract-audio', (_e, { inputPath, hardLimiter, trim, customFilen
         resolve({ success: true, outputPath: outPath });
       } else {
         mainWindow?.webContents.send('extract-progress', 'Failed');
+        resolve({ success: false, error: stderr.slice(-400) });
+      }
+    });
+  });
+});
+
+// ─── Lower Third Generator ──────────────────────────────────────────────────
+function resolveLtDir() {
+  const folderName = 'LowerThird Files';
+  const candidates = isDev ? [
+    path.join(__dirname, '..', folderName),
+    path.join(process.cwd(), folderName),
+    path.join(app.getAppPath(), folderName),
+  ] : [
+    path.join(process.resourcesPath, folderName),
+  ];
+  for (const c of candidates) {
+    if (fs.existsSync(c)) return c;
+  }
+  return null;
+}
+
+ipcMain.handle('get-lt-files', () => {
+  const ltDir = resolveLtDir();
+  if (!ltDir) return { error: 'LowerThird Files folder not found' };
+
+  const movPath = path.join(ltDir, 'GENERIC LOWER.mov');
+  const pngPath = path.join(ltDir, 'GENERIC LOWER.png');
+  const fontPath = path.join(ltDir, 'ITC Avant Garde Gothic LT Bold.otf');
+
+  const missing = [];
+  if (!fs.existsSync(movPath)) missing.push('GENERIC LOWER.mov');
+  if (!fs.existsSync(pngPath)) missing.push('GENERIC LOWER.png');
+  if (!fs.existsSync(fontPath)) missing.push('ITC Avant Garde Gothic LT Bold.otf');
+
+  if (missing.length) return { error: 'Missing files in LowerThird Files: ' + missing.join(', ') };
+
+  // Return base64 data for renderer (PNG preview + font for canvas)
+  const pngData = fs.readFileSync(pngPath).toString('base64');
+  const fontData = fs.readFileSync(fontPath).toString('base64');
+
+  return {
+    success: true,
+    movPath,
+    pngPath,
+    fontPath,
+    pngBase64: 'data:image/png;base64,' + pngData,
+    fontBase64: 'data:font/opentype;base64,' + fontData,
+  };
+});
+
+ipcMain.handle('generate-lower-third', async (_e, { line1, line2, fontSize1, fontSize2, x1, y1, x2, y2, duration, forceUppercase }) => {
+  if (!binaryOk(FFMPEG)) return { success: false, error: 'ffmpeg.exe not found in bin/ folder' };
+
+  const ltDir = resolveLtDir();
+  if (!ltDir) return { success: false, error: 'LowerThird Files folder not found' };
+
+  const movPath = path.join(ltDir, 'GENERIC LOWER.mov');
+  const fontPath = path.join(ltDir, 'ITC Avant Garde Gothic LT Bold.otf');
+
+  if (!fs.existsSync(movPath)) return { success: false, error: 'GENERIC LOWER.mov not found' };
+  if (!fs.existsSync(fontPath)) return { success: false, error: 'Font file not found' };
+
+  // Build default filename from text
+  const safeName = (str) => str.replace(/[^a-zA-Z0-9 _-]/g, '').trim().replace(/\s+/g, '_').slice(0, 40);
+  const defaultName = 'LT_' + safeName(line1 || 'untitled') + (line2 ? '_' + safeName(line2) : '') + '.mov';
+
+  // Show save dialog
+  const result = await dialog.showSaveDialog(mainWindow, {
+    title: 'Save Lower Third',
+    defaultPath: path.join(readStore().downloadPath || app.getPath('downloads'), defaultName),
+    filters: [{ name: 'QuickTime Movie', extensions: ['mov'] }],
+  });
+
+  if (result.canceled || !result.filePath) return { success: false, error: 'Export cancelled' };
+  const outputPath = result.filePath;
+
+  // Calculate loop count: ceil(duration / 8) full loops
+  const loopCount = Math.ceil((duration || 60) / 8);
+  const totalDuration = loopCount * 8;
+  const streamLoops = loopCount - 1;
+
+  // Prepare text
+  const text1 = escapeFFmpegText(forceUppercase ? (line1 || '').toUpperCase() : (line1 || ''));
+  const text2 = escapeFFmpegText(line2 || '');
+  const ffFontPath = fontPath.replace(/\\/g, '/').replace(/:/g, '\\:');
+
+  // Build drawtext filters — positions calibrated from pixel analysis of GENERIC LOWER.png
+  // Dark blue bar: y=813–841, Light bar: y=842–929, text starts at x=262
+  const filters = [];
+  if (text1) {
+    filters.push(`drawtext=fontfile='${ffFontPath}':text='${text1}':fontcolor=black:fontsize=${fontSize1 || 68}:x=${x1 || 363}:y=${y1 || 857}`);
+  }
+  if (text2) {
+    filters.push(`drawtext=fontfile='${ffFontPath}':text='${text2}':fontcolor=black:fontsize=${fontSize2 || 38}:x=${x2 || 363}:y=${y2 || 943}`);
+  }
+
+  const args = [];
+  if (streamLoops > 0) args.push('-stream_loop', String(streamLoops));
+  args.push('-i', movPath);
+
+  if (filters.length) {
+    args.push('-vf', filters.join(','));
+  }
+
+  args.push('-t', String(totalDuration));
+  args.push('-c:v', 'prores_ks', '-profile:v', '4444', '-pix_fmt', 'yuva444p10le');
+  args.push('-an');
+  args.push('-y', outputPath);
+
+  logEntry({ event: 'lt-generate-start', line1, line2, duration: totalDuration, outputPath });
+  mainWindow?.webContents.send('lt-progress', JSON.stringify({ status: 'running', pct: 0, msg: 'Starting export...' }));
+
+  return new Promise((resolve) => {
+    let proc;
+    try {
+      proc = spawn(FFMPEG, args, { windowsHide: true });
+    } catch (err) {
+      return resolve({ success: false, error: err.message });
+    }
+
+    let stderr = '';
+    proc.stderr.on('data', d => {
+      const chunk = d.toString();
+      stderr += chunk;
+      // Parse progress from FFmpeg output
+      const timeMatch = chunk.match(/time=(\d+):(\d+):(\d+)\.(\d+)/);
+      if (timeMatch) {
+        const secs = parseInt(timeMatch[1]) * 3600 + parseInt(timeMatch[2]) * 60 + parseInt(timeMatch[3]);
+        const pct = Math.min(99, Math.round((secs / totalDuration) * 100));
+        mainWindow?.webContents.send('lt-progress', JSON.stringify({ status: 'running', pct, msg: `Encoding: ${pct}%` }));
+      }
+    });
+
+    proc.on('error', err => {
+      logEntry({ event: 'lt-generate-error', error: err.message });
+      resolve({ success: false, error: err.message });
+    });
+
+    proc.on('close', code => {
+      logEntry({ event: 'lt-generate-done', code, outputPath });
+      if (code === 0 && fs.existsSync(outputPath)) {
+        mainWindow?.webContents.send('lt-progress', JSON.stringify({ status: 'done', pct: 100, msg: 'Export complete!' }));
+        resolve({ success: true, outputPath, actualDuration: totalDuration });
+      } else {
+        mainWindow?.webContents.send('lt-progress', JSON.stringify({ status: 'error', pct: 0, msg: 'Export failed' }));
         resolve({ success: false, error: stderr.slice(-400) });
       }
     });

@@ -1,5 +1,16 @@
 # Changelog
 
+## v2.4.0 (2026-04-02)
+
+### New Features
+- **Lower Third Generator Tab** — New sidebar tab to create broadcast-ready lower third graphics. Type headline and subtext, see a live preview on the GENERIC LOWER template, and export as ProRes 4444 MOV with alpha channel at 1920×1080.
+- **TriCaster-Matched Defaults** — Font sizes (70/40) and text positions match TriCaster output out of the box using ITC Avant Garde Gothic LT Bold.
+- **Adjustable Position Controls** — Per-line font size sliders plus X/Y offset controls for fine-tuning text placement, with a one-click Reset to Default button.
+- **Loop-to-Duration Export** — Set any duration; the 8-second lower third animation loops to fill it, always rounding up to complete loops. Progress bar shown during export.
+- **Force Uppercase Toggle** — Auto-capitalizes Line 1 (headline) text, enabled by default.
+
+---
+
 ## v2.3.1 (2026-03-19)
 
 ### New Features
