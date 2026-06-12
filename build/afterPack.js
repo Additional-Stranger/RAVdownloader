@@ -3,6 +3,9 @@ const { execFileSync } = require('child_process');
 const fs = require('fs');
 
 exports.default = async function(context) {
+  // Windows-only: embed icon via rcedit. On Mac the icon comes from .icns in build config.
+  if (context.electronPlatformName !== 'win32') return;
+
   const exePath = path.join(context.appOutDir, 'RAVdownloader.exe');
   const iconPath = path.join(__dirname, '..', 'assets', 'icon.ico');
 

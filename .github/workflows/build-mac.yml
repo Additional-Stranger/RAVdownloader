@@ -1,0 +1,144 @@
+name: Build macOS (arm64)
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: macos-14   # Apple Silicon (M1) runner
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Read app version
+        id: ver
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "App version: $VERSION"
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Download Mac binaries (yt-dlp, ffmpeg, ffprobe)
+        run: |
+          set -e
+          mkdir -p bin-mac
+
+          echo "▶ yt-dlp (universal)"
+          curl -L -o bin-mac/yt-dlp "https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp_macos"
+          chmod +x bin-mac/yt-dlp
+
+          echo "▶ ffmpeg + ffprobe (arm64 static builds)"
+          # osxexperts.net ships arm64 static builds. We download a known-good zip
+          # per binary so it works in CI without manual intervention.
+          # NOTE: if these URLs ever break, swap to a fixed-tag mirror.
+          curl -L -o /tmp/ffmpeg.zip "https://www.osxexperts.net/ffmpeg711arm.zip"
+          unzip -o /tmp/ffmpeg.zip -d /tmp/ffmpeg-extract
+          # Find the ffmpeg binary inside the extract (zip layout varies between releases)
+          FFMPEG_BIN=$(find /tmp/ffmpeg-extract -type f -name ffmpeg -perm -u+x | head -n1)
+          if [ -z "$FFMPEG_BIN" ]; then
+            echo "::error::Could not locate ffmpeg binary in extracted archive"
+            ls -laR /tmp/ffmpeg-extract
+            exit 1
+          fi
+          cp "$FFMPEG_BIN" bin-mac/ffmpeg
+          chmod +x bin-mac/ffmpeg
+
+          curl -L -o /tmp/ffprobe.zip "https://www.osxexperts.net/ffprobe711arm.zip"
+          unzip -o /tmp/ffprobe.zip -d /tmp/ffprobe-extract
+          FFPROBE_BIN=$(find /tmp/ffprobe-extract -type f -name ffprobe -perm -u+x | head -n1)
+          if [ -z "$FFPROBE_BIN" ]; then
+            echo "::error::Could not locate ffprobe binary in extracted archive"
+            ls -laR /tmp/ffprobe-extract
+            exit 1
+          fi
+          cp "$FFPROBE_BIN" bin-mac/ffprobe
+          chmod +x bin-mac/ffprobe
+
+          echo "▶ Verifying binaries"
+          ./bin-mac/yt-dlp --version
+          ./bin-mac/ffmpeg -version | head -n1
+          ./bin-mac/ffprobe -version | head -n1
+
+      - name: Generate .icns from PNG
+        run: |
+          set -e
+          PNG_SRC="assets/RAV DOWNLOADER ICON.png"
+          if [ ! -f "$PNG_SRC" ]; then
+            PNG_SRC="assets/logo.png"
+          fi
+          if [ ! -f "$PNG_SRC" ]; then
+            echo "::error::No source PNG found for icns generation"
+            exit 1
+          fi
+          mkdir -p /tmp/icon.iconset
+          for SIZE in 16 32 64 128 256 512 1024; do
+            sips -z $SIZE $SIZE "$PNG_SRC" --out "/tmp/icon.iconset/icon_${SIZE}x${SIZE}.png" >/dev/null
+          done
+          # Add @2x retina sizes (Apple iconutil convention)
+          cp /tmp/icon.iconset/icon_32x32.png   /tmp/icon.iconset/icon_16x16@2x.png
+          cp /tmp/icon.iconset/icon_64x64.png   /tmp/icon.iconset/icon_32x32@2x.png
+          cp /tmp/icon.iconset/icon_256x256.png /tmp/icon.iconset/icon_128x128@2x.png
+          cp /tmp/icon.iconset/icon_512x512.png /tmp/icon.iconset/icon_256x256@2x.png
+          cp /tmp/icon.iconset/icon_1024x1024.png /tmp/icon.iconset/icon_512x512@2x.png
+          iconutil -c icns /tmp/icon.iconset -o assets/icon.icns
+          ls -la assets/icon.icns
+
+      - name: Build DMG
+        run: npm run dist:mac
+        env:
+          # Tell electron-builder not to look for a signing identity (we ad-hoc sign in afterSign).
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+
+      - name: Smoke-test the built app
+        run: |
+          set -e
+          APP="dist/mac-arm64/RAVdownloader.app"
+          if [ ! -d "$APP" ]; then
+            APP=$(find dist -name 'RAVdownloader.app' -maxdepth 3 -type d | head -n1)
+          fi
+          echo "Smoke-testing: $APP"
+
+          # 1. Bundled binaries present and executable
+          test -x "$APP/Contents/Resources/bin/yt-dlp"   || (echo "::error::yt-dlp missing"   && exit 1)
+          test -x "$APP/Contents/Resources/bin/ffmpeg"   || (echo "::error::ffmpeg missing"   && exit 1)
+          test -x "$APP/Contents/Resources/bin/ffprobe"  || (echo "::error::ffprobe missing"  && exit 1)
+
+          # 2. Bundled binaries actually run
+          "$APP/Contents/Resources/bin/yt-dlp" --version
+          "$APP/Contents/Resources/bin/ffmpeg" -version | head -n1
+          "$APP/Contents/Resources/bin/ffprobe" -version | head -n1
+
+          # 3. App is ad-hoc signed (so Gatekeeper won't show "damaged")
+          codesign -dv "$APP" 2>&1 | grep -i "Signature=adhoc" || (echo "::error::App not ad-hoc signed" && exit 1)
+
+      - name: Locate built DMG
+        id: dmg
+        run: |
+          DMG=$(find dist -maxdepth 2 -name '*.dmg' | head -n1)
+          if [ -z "$DMG" ]; then
+            echo "::error::No .dmg produced"
+            ls -laR dist
+            exit 1
+          fi
+          echo "Found: $DMG"
+          echo "path=$DMG" >> "$GITHUB_OUTPUT"
+          echo "name=$(basename "$DMG")" >> "$GITHUB_OUTPUT"
+
+      - name: Upload DMG artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: RAVdownloader-mac-arm64-${{ steps.ver.outputs.version }}
+          path: ${{ steps.dmg.outputs.path }}
+          if-no-files-found: error
+          retention-days: 30

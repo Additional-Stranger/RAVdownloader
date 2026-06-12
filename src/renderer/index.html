@@ -6,26 +6,41 @@
 <title>RAVdownloader by Colin</title>
 <style>
 /* ── Fonts ── */
-@import url('https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=DM+Mono:wght@300;400;500&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=DM+Mono:wght@300;400;500&family=Inter:wght@400;500;600;700;800&display=swap');
 
 :root {
-  --bg: #0c0c0e;
-  --bg2: #111114;
-  --bg3: #16161a;
-  --bg4: #1c1c22;
+  /* Brand colors */
+  --brand-navy: #1d145a;
+  --brand-navy-2: #2a1e85;
+  --brand-navy-3: #110a3a;
+  --brand-red: #c30000;
+  --brand-red-2: #e63b3b;
+
+  /* Surfaces (near-black with subtle navy tint so red CTAs sit on neutral dark, not on solid blue) */
+  --bg: #0c0a18;
+  --bg2: #14112c;
+  --bg3: #1a1738;
+  --bg4: #221e4a;
   --border: rgba(255,255,255,0.07);
-  --border2: rgba(255,255,255,0.12);
-  --accent: #e8ff47;
-  --accent2: #c8e820;
-  --accent-dim: rgba(232,255,71,0.12);
-  --accent-glow: rgba(232,255,71,0.25);
-  --text: #f0f0f0;
-  --text2: #9a9aa8;
-  --text3: #5a5a6a;
-  --red: #ff4a4a;
+  --border2: rgba(255,255,255,0.14);
+
+  /* Action accent = brand red */
+  --accent: #c30000;
+  --accent2: #e63b3b;
+  --accent-dim: rgba(195,0,0,0.14);
+  --accent-glow: rgba(195,0,0,0.30);
+
+  /* Text */
+  --text: #ffffff;
+  --text2: #b8b3d4;
+  --text3: #6e6a92;
+
+  /* Status (red is reserved for accent; errors use a distinct hot-red so they don't blend with CTAs) */
+  --red: #ff5252;
   --green: #47ffb0;
   --blue: #4ab3ff;
   --orange: #ffaa47;
+
   --radius: 12px;
   --radius-sm: 8px;
   --font: 'Syne', sans-serif;
@@ -44,26 +59,33 @@ html, body { height: 100%; overflow: hidden; background: var(--bg); color: var(-
 /* ── Titlebar ── */
 #titlebar {
   display: flex; align-items: center; justify-content: space-between;
-  height: 44px; padding: 0 16px;
-  background: var(--bg2); border-bottom: 1px solid var(--border);
+  height: 48px; padding: 0 16px;
+  background: linear-gradient(180deg, #1d145a 0%, #110a3a 100%);
+  border-bottom: 1px solid rgba(255,255,255,0.08);
   -webkit-app-region: drag; user-select: none; flex-shrink: 0;
+  box-shadow: 0 1px 0 rgba(0,0,0,0.4);
 }
-#titlebar-logo { display: flex; align-items: center; gap: 10px; }
+#titlebar-logo { display: flex; align-items: center; gap: 12px; }
 #titlebar-logo .logo-mark {
-  width: 26px; height: 26px; background: var(--accent); border-radius: 6px;
+  width: 30px; height: 30px; border-radius: 6px;
   display: flex; align-items: center; justify-content: center;
-  font-size: 13px; font-weight: 800; color: #000; line-height: 1;
+  background: transparent; overflow: hidden;
 }
-#titlebar-logo .logo-text { font-size: 13px; font-weight: 700; letter-spacing: 0.03em; color: var(--text); }
-#titlebar-logo .logo-text span { color: var(--accent); }
+#titlebar-logo .logo-mark img { width: 100%; height: 100%; object-fit: contain; display: block; }
+#titlebar-logo .logo-text { font-size: 13px; font-weight: 700; letter-spacing: 0.04em; color: #ffffff; }
+#titlebar-logo .logo-text span { color: #ffffff; opacity: 0.7; font-weight: 500; }
 #titlebar-controls { display: flex; gap: 6px; -webkit-app-region: no-drag; }
+/* macOS: native traffic lights live at top-left of the window. Hide our custom controls
+   and pad the logo over so it doesn't sit under the traffic lights. */
+body.mac #titlebar-controls { display: none; }
+body.mac #titlebar { padding-left: 88px; }
 .tc-btn {
-  width: 28px; height: 28px; border-radius: 7px; border: none; cursor: pointer;
+  width: 30px; height: 30px; border-radius: 7px; border: none; cursor: pointer;
   display: flex; align-items: center; justify-content: center; font-size: 12px;
-  background: var(--bg3); color: var(--text2); transition: all 0.15s;
+  background: rgba(255,255,255,0.06); color: rgba(255,255,255,0.78); transition: all 0.15s;
 }
-.tc-btn:hover { background: var(--bg4); color: var(--text); }
-.tc-btn.close:hover { background: var(--red); color: #fff; }
+.tc-btn:hover { background: rgba(255,255,255,0.14); color: #fff; }
+.tc-btn.close:hover { background: var(--brand-red); color: #fff; }
 
 /* ── Layout ── */
 #app { display: flex; flex-direction: column; height: 100vh; }
@@ -71,35 +93,49 @@ html, body { height: 100%; overflow: hidden; background: var(--bg); color: var(-
 
 /* ── Sidebar ── */
 #sidebar {
-  width: 220px; flex-shrink: 0; background: var(--bg2);
-  border-right: 1px solid var(--border); display: flex; flex-direction: column;
+  width: 232px; flex-shrink: 0;
+  background: linear-gradient(180deg, #15102f 0%, #0f0a26 100%);
+  border-right: 1px solid rgba(255,255,255,0.05);
+  display: flex; flex-direction: column;
   padding: 20px 12px;
   -webkit-app-region: no-drag;
 }
 .sidebar-section { margin-bottom: 24px; }
-.sidebar-label { font-size: 10px; font-weight: 600; letter-spacing: 0.1em; color: var(--text3); text-transform: uppercase; padding: 0 8px; margin-bottom: 8px; }
+.sidebar-label { font-size: 10px; font-weight: 700; letter-spacing: 0.14em; color: var(--text3); text-transform: uppercase; padding: 0 10px; margin-bottom: 10px; }
 .nav-btn {
-  display: flex; align-items: center; gap: 10px; width: 100%;
-  padding: 9px 12px; border-radius: var(--radius-sm); border: none; cursor: pointer;
+  position: relative;
+  display: flex; align-items: center; gap: 11px; width: 100%;
+  padding: 10px 14px; border-radius: var(--radius-sm); border: 1px solid transparent; cursor: pointer;
   background: transparent; color: var(--text2); font-family: var(--font);
   font-size: 13px; font-weight: 500; transition: all 0.15s; text-align: left;
 }
-.nav-btn svg { width: 16px; height: 16px; flex-shrink: 0; opacity: 0.7; }
-.nav-btn:hover { background: var(--bg3); color: var(--text); }
+.nav-btn svg { width: 16px; height: 16px; flex-shrink: 0; opacity: 0.65; transition: opacity 0.15s; }
+.nav-btn:hover { background: rgba(255,255,255,0.04); color: var(--text); }
 .nav-btn:hover svg { opacity: 1; }
-.nav-btn.active { background: var(--accent-dim); color: var(--accent); border: 1px solid rgba(232,255,71,0.2); }
-.nav-btn.active svg { opacity: 1; }
+.nav-btn.active {
+  background: rgba(255,255,255,0.07);
+  color: #ffffff;
+  border-color: rgba(255,255,255,0.10);
+  font-weight: 600;
+}
+.nav-btn.active::before {
+  content: ''; position: absolute; left: -1px; top: 6px; bottom: 6px;
+  width: 3px; border-radius: 2px;
+  background: linear-gradient(180deg, var(--brand-red-2), var(--brand-red));
+  box-shadow: 0 0 8px rgba(195,0,0,0.6);
+}
+.nav-btn.active svg { opacity: 1; color: var(--brand-red-2); }
 
 .sidebar-divider { height: 1px; background: var(--border); margin: 12px 0; }
 .sidebar-bottom { margin-top: auto; }
 .version-badge {
-  padding: 10px 12px; background: var(--bg3); border-radius: var(--radius-sm);
-  border: 1px solid var(--border);
+  padding: 10px 12px; background: rgba(255,255,255,0.04); border-radius: var(--radius-sm);
+  border: 1px solid rgba(255,255,255,0.06);
 }
-.version-badge .vb-label { font-size: 10px; color: var(--text3); font-family: var(--mono); margin-bottom: 2px; }
-.version-badge .vb-value { font-size: 12px; color: var(--accent); font-family: var(--mono); font-weight: 500; }
+.version-badge .vb-label { font-size: 10px; color: var(--text3); font-family: var(--mono); margin-bottom: 2px; letter-spacing: 0.05em; }
+.version-badge .vb-value { font-size: 12px; color: #ffffff; font-family: var(--mono); font-weight: 600; }
 .credit-tag { font-size: 11px; color: var(--text3); padding: 8px 12px; margin-top: 8px; }
-.credit-tag span { color: var(--text2); }
+.credit-tag span { color: var(--text2); font-weight: 600; }
 
 /* ── Content ── */
 #content { flex: 1; overflow-y: auto; overflow-x: hidden; padding: 28px 32px; -webkit-app-region: no-drag; }
@@ -109,59 +145,69 @@ html, body { height: 100%; overflow: hidden; background: var(--bg); color: var(-
 .view.active { display: block; }
 
 /* ── Page Header ── */
-.page-header { margin-bottom: 28px; }
-.page-title { font-size: 26px; font-weight: 800; letter-spacing: -0.02em; color: var(--text); margin-bottom: 4px; }
-.page-title span { color: var(--accent); }
+.page-header { margin-bottom: 24px; }
+.page-title { font-size: 28px; font-weight: 800; letter-spacing: -0.02em; color: var(--text); margin-bottom: 6px; }
+.page-title span {
+  background: linear-gradient(135deg, var(--brand-red-2), var(--brand-red));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
 .page-subtitle { font-size: 13px; color: var(--text2); }
 
 /* ── Cards ── */
 .card {
   background: var(--bg2); border: 1px solid var(--border);
-  border-radius: var(--radius); padding: 20px; margin-bottom: 16px;
+  border-radius: var(--radius); padding: 20px; margin-bottom: 14px;
+  box-shadow: 0 1px 0 rgba(255,255,255,0.02) inset;
 }
-.card-title { font-size: 12px; font-weight: 600; letter-spacing: 0.07em; color: var(--text3); text-transform: uppercase; margin-bottom: 16px; }
+.card-title { font-size: 11px; font-weight: 700; letter-spacing: 0.10em; color: var(--text3); text-transform: uppercase; margin-bottom: 14px; }
 
 /* ── Input URL area ── */
 .url-input-wrap {
-  display: flex; gap: 10px; align-items: stretch;
+  display: flex; gap: 8px; align-items: stretch;
   background: var(--bg3); border: 1px solid var(--border); border-radius: var(--radius);
-  padding: 6px 6px 6px 16px; transition: border-color 0.2s;
+  padding: 6px 6px 6px 16px; transition: all 0.2s;
+  height: 52px;
 }
-.url-input-wrap:focus-within { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-glow); }
+.url-input-wrap:focus-within { border-color: var(--brand-red-2); box-shadow: 0 0 0 3px var(--accent-glow); }
 #url-input {
   flex: 1; background: transparent; border: none; outline: none;
-  color: var(--text); font-family: var(--font); font-size: 14px;
-  caret-color: var(--accent);
+  color: var(--text); font-family: var(--font); font-size: 15px;
+  caret-color: var(--brand-red-2);
 }
 #url-input::placeholder { color: var(--text3); }
 
 .type-select {
   background: var(--bg4); border: 1px solid var(--border); border-radius: 8px;
-  color: var(--text); font-family: var(--font); font-size: 13px; font-weight: 600;
+  color: var(--text); font-family: var(--font); font-size: 13px; font-weight: 700;
   padding: 0 14px; cursor: pointer; outline: none;
   appearance: none; -webkit-appearance: none;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%239a9aa8'/%3E%3C/svg%3E");
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%23b8b3d4'/%3E%3C/svg%3E");
   background-repeat: no-repeat; background-position: right 10px center;
-  padding-right: 28px;
+  padding-right: 28px; letter-spacing: 0.04em;
 }
+.type-select:hover { border-color: var(--border2); }
 
 .add-btn {
-  background: var(--accent); color: #000; font-family: var(--font); font-size: 13px;
-  font-weight: 700; border: none; border-radius: 8px; padding: 0 20px;
+  background: linear-gradient(180deg, #d8201f 0%, #a50000 100%);
+  color: #ffffff; font-family: var(--font); font-size: 13px;
+  font-weight: 700; border: none; border-radius: 8px; padding: 0 22px;
   cursor: pointer; transition: all 0.15s; white-space: nowrap;
-  letter-spacing: 0.02em;
+  letter-spacing: 0.04em; text-transform: uppercase;
+  box-shadow: 0 2px 0 rgba(0,0,0,0.25), 0 0 0 1px rgba(255,255,255,0.06) inset;
 }
-.add-btn:hover { background: var(--accent2); transform: translateY(-1px); }
+.add-btn:hover { background: linear-gradient(180deg, #e63b3b 0%, #b80000 100%); transform: translateY(-1px); box-shadow: 0 4px 12px rgba(195,0,0,0.4), 0 0 0 1px rgba(255,255,255,0.08) inset; }
 .add-btn:active { transform: translateY(0); }
 .add-btn.download-mode {
-  background: linear-gradient(135deg, #3dfaac, #22c97e);
-  color: #000;
-  box-shadow: 0 0 16px rgba(61,250,172,0.35);
+  background: linear-gradient(180deg, #3dfaac, #22c97e);
+  color: #001a0c;
+  box-shadow: 0 4px 14px rgba(61,250,172,0.35), 0 0 0 1px rgba(255,255,255,0.1) inset;
 }
-.add-btn.download-mode:hover { background: linear-gradient(135deg, #22c97e, #1aad6a); box-shadow: 0 0 24px rgba(61,250,172,0.5); }
+.add-btn.download-mode:hover { background: linear-gradient(180deg, #4dffb8, #28d488); box-shadow: 0 4px 18px rgba(61,250,172,0.5), 0 0 0 1px rgba(255,255,255,0.15) inset; }
 
-.options-row { display: flex; align-items: center; gap: 20px; margin-top: 12px; }
-.toggle-wrap { display: flex; align-items: center; gap: 8px; cursor: pointer; }
+.options-row { display: flex; align-items: center; gap: 18px; margin-top: 14px; flex-wrap: wrap; }
+.toggle-wrap { display: flex; align-items: center; gap: 9px; cursor: pointer; user-select: none; }
 .toggle-wrap input[type=checkbox] { display: none; }
 .toggle {
   width: 36px; height: 20px; background: var(--bg4); border-radius: 99px;
@@ -172,9 +218,14 @@ html, body { height: 100%; overflow: hidden; background: var(--bg); color: var(-
   width: 12px; height: 12px; background: var(--text3);
   border-radius: 50%; transition: all 0.2s;
 }
-.toggle-wrap input:checked + .toggle { background: var(--accent-dim); border-color: var(--accent); }
-.toggle-wrap input:checked + .toggle::after { background: var(--accent); transform: translateX(16px); }
+.toggle-wrap input:checked + .toggle {
+  background: linear-gradient(180deg, #d8201f, #a50000);
+  border-color: var(--brand-red-2);
+  box-shadow: 0 0 8px rgba(195,0,0,0.4);
+}
+.toggle-wrap input:checked + .toggle::after { background: #ffffff; transform: translateX(16px); }
 .toggle-label { font-size: 12px; color: var(--text2); font-weight: 500; }
+.toggle-wrap:hover .toggle-label { color: var(--text); }
 
 .bandwidth-wrap { display: flex; align-items: center; gap: 8px; }
 .bandwidth-wrap label { font-size: 12px; color: var(--text2); font-weight: 500; }
@@ -193,18 +244,26 @@ html, body { height: 100%; overflow: hidden; background: var(--bg); color: var(-
 .queue-actions { display: flex; gap: 8px; }
 
 .btn {
-  padding: 7px 14px; border-radius: 7px; border: none; cursor: pointer;
+  padding: 8px 14px; border-radius: 7px; border: 1px solid transparent; cursor: pointer;
   font-family: var(--font); font-size: 12px; font-weight: 600; transition: all 0.15s;
-  letter-spacing: 0.02em;
+  letter-spacing: 0.03em;
 }
-.btn-ghost { background: var(--bg3); color: var(--text2); border: 1px solid var(--border); }
-.btn-ghost:hover { background: var(--bg4); color: var(--text); }
-.btn-primary { background: var(--accent); color: #000; }
-.btn-primary:hover { background: var(--accent2); transform: translateY(-1px); }
-.btn-danger { background: rgba(255,74,74,0.15); color: var(--red); border: 1px solid rgba(255,74,74,0.25); }
-.btn-danger:hover { background: rgba(255,74,74,0.25); }
-.btn-success { background: rgba(71,255,176,0.12); color: var(--green); border: 1px solid rgba(71,255,176,0.2); }
-.btn-success:hover { background: rgba(71,255,176,0.2); }
+.btn-ghost { background: rgba(255,255,255,0.04); color: var(--text2); border-color: rgba(255,255,255,0.08); }
+.btn-ghost:hover { background: rgba(255,255,255,0.09); color: var(--text); border-color: rgba(255,255,255,0.14); }
+.btn-primary {
+  background: linear-gradient(180deg, #d8201f 0%, #a50000 100%);
+  color: #ffffff;
+  box-shadow: 0 2px 0 rgba(0,0,0,0.25), 0 0 0 1px rgba(255,255,255,0.06) inset;
+}
+.btn-primary:hover {
+  background: linear-gradient(180deg, #e63b3b 0%, #b80000 100%);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(195,0,0,0.4), 0 0 0 1px rgba(255,255,255,0.08) inset;
+}
+.btn-danger { background: rgba(255,82,82,0.12); color: var(--red); border: 1px solid rgba(255,82,82,0.28); }
+.btn-danger:hover { background: rgba(255,82,82,0.22); }
+.btn-success { background: rgba(71,255,176,0.10); color: var(--green); border: 1px solid rgba(71,255,176,0.22); }
+.btn-success:hover { background: rgba(71,255,176,0.18); }
 
 .queue-empty {
   padding: 48px; text-align: center; color: var(--text3);
@@ -250,15 +309,15 @@ html, body { height: 100%; overflow: hidden; background: var(--bg); color: var(-
 @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.3} }
 
 .progress-bar-wrap { height: 5px; background: var(--bg4); border-radius: 99px; margin-top: 4px; overflow: hidden; min-width: 120px; }
-.progress-bar-fill { height: 100%; background: linear-gradient(90deg, var(--accent2, #7c6cfc), var(--accent)); border-radius: 99px; transition: width 0.4s ease; width: 0%; }
+.progress-bar-fill { height: 100%; background: linear-gradient(90deg, var(--brand-navy-2), var(--brand-red-2)); border-radius: 99px; transition: width 0.4s ease; width: 0%; box-shadow: 0 0 8px rgba(195,0,0,0.35); }
 
 .row-download-btn {
-  padding: 5px 12px; border-radius: 6px; border: none; cursor: pointer;
+  padding: 6px 12px; border-radius: 6px; border: 1px solid rgba(195,0,0,0.35); cursor: pointer;
   font-family: var(--font); font-size: 11px; font-weight: 700;
-  background: var(--accent-dim); color: var(--accent); border: 1px solid rgba(232,255,71,0.2);
-  transition: all 0.15s; letter-spacing: 0.03em;
+  background: rgba(195,0,0,0.15); color: var(--brand-red-2);
+  transition: all 0.15s; letter-spacing: 0.04em; text-transform: uppercase;
 }
-.row-download-btn:hover { background: var(--accent); color: #000; }
+.row-download-btn:hover { background: linear-gradient(180deg, #d8201f, #a50000); color: #ffffff; border-color: var(--brand-red); }
 .row-remove-btn {
   padding: 5px 8px; border-radius: 6px; border: none; cursor: pointer;
   background: transparent; color: var(--text3); font-size: 12px; transition: all 0.15s;
@@ -306,14 +365,14 @@ html, body { height: 100%; overflow: hidden; background: var(--bg); color: var(-
   border-radius: var(--radius-sm); cursor: pointer; transition: all 0.15s;
 }
 .quality-item:hover { border-color: var(--accent); background: var(--accent-dim); }
-.quality-item.best { border-color: rgba(232,255,71,0.3); }
+.quality-item.best { border-color: rgba(195,0,0,0.35); }
 .quality-label { font-size: 14px; font-weight: 700; }
 .quality-meta { font-size: 11px; color: var(--text3); font-family: var(--mono); }
 .quality-badge {
   padding: 3px 8px; border-radius: 5px; font-size: 10px; font-weight: 700;
   letter-spacing: 0.05em; font-family: var(--mono);
 }
-.quality-badge.best-badge { background: var(--accent); color: #000; }
+.quality-badge.best-badge { background: linear-gradient(135deg, var(--brand-red-2), var(--brand-red)); color: #ffffff; }
 .quality-badge.res-badge { background: var(--bg4); color: var(--text2); }
 
 /* ── Advanced panel (main page) ── */
@@ -413,7 +472,7 @@ html, body { height: 100%; overflow: hidden; background: var(--bg); color: var(-
 .settings-row .sr-left {}
 .settings-row .sr-label { font-size: 13px; font-weight: 600; margin-bottom: 2px; }
 .settings-row .sr-desc { font-size: 11px; color: var(--text3); }
-.path-display { font-size: 11px; color: var(--accent); font-family: var(--mono); background: var(--bg3); padding: 6px 10px; border-radius: 6px; max-width: 300px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.path-display { font-size: 11px; color: #ffffff; font-family: var(--mono); background: var(--bg3); padding: 6px 10px; border-radius: 6px; max-width: 300px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; border: 1px solid var(--border); }
 
 /* ── Animations ── */
 @keyframes fadeIn { from{opacity:0;transform:translateY(6px)} to{opacity:1;transform:translateY(0)} }
@@ -430,7 +489,7 @@ html, body { height: 100%; overflow: hidden; background: var(--bg); color: var(-
 #toast.show { transform: translateY(0); opacity: 1; }
 #toast.success { border-color: rgba(71,255,176,0.4); color: var(--green); }
 #toast.error { border-color: rgba(255,74,74,0.4); color: var(--red); }
-#toast.info { border-color: rgba(232,255,71,0.3); color: var(--accent); }
+#toast.info { border-color: rgba(195,0,0,0.35); color: var(--brand-red-2); }
 
 /* ── Spinner ── */
 .spinner { width: 14px; height: 14px; border: 2px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin 0.7s linear infinite; display: inline-block; }
@@ -459,9 +518,20 @@ html, body { height: 100%; overflow: hidden; background: var(--bg); color: var(-
   transform: scale(0.92) translateY(12px); transition: transform 0.3s cubic-bezier(0.34,1.56,0.64,1);
 }
 .welcome-overlay.open .welcome-modal { transform: scale(1) translateY(0); }
-.welcome-logo { width: 52px; height: 52px; background: var(--accent); border-radius: 14px; display: inline-flex; align-items: center; justify-content: center; font-size: 24px; font-weight: 800; color: #000; margin-bottom: 16px; }
-.welcome-title { font-size: 22px; font-weight: 800; letter-spacing: -0.02em; margin-bottom: 4px; }
-.welcome-title span { color: var(--accent); }
+.welcome-logo {
+  width: 72px; height: 72px; background: transparent; border-radius: 14px;
+  display: inline-flex; align-items: center; justify-content: center;
+  margin-bottom: 18px; overflow: hidden;
+  box-shadow: 0 8px 24px rgba(29,20,90,0.5);
+}
+.welcome-logo img { width: 100%; height: 100%; object-fit: contain; display: block; }
+.welcome-title { font-size: 24px; font-weight: 800; letter-spacing: -0.02em; margin-bottom: 4px; }
+.welcome-title span {
+  background: linear-gradient(135deg, var(--brand-red-2), var(--brand-red));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
 .welcome-subtitle { font-size: 13px; color: var(--text2); margin-bottom: 24px; line-height: 1.5; }
 
 /* Steps */
@@ -471,8 +541,11 @@ html, body { height: 100%; overflow: hidden; background: var(--bg); color: var(-
 }
 .welcome-step-header { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
 .welcome-step-num {
-  width: 22px; height: 22px; border-radius: 50%; background: var(--accent); color: #000;
+  width: 24px; height: 24px; border-radius: 50%;
+  background: linear-gradient(135deg, var(--brand-red-2), var(--brand-red));
+  color: #ffffff;
   font-size: 11px; font-weight: 800; display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+  box-shadow: 0 0 12px rgba(195,0,0,0.35);
 }
 .welcome-step-title { font-size: 13px; font-weight: 700; }
 .welcome-step-desc { font-size: 12px; color: var(--text2); line-height: 1.4; margin-bottom: 10px; }
@@ -494,11 +567,13 @@ html, body { height: 100%; overflow: hidden; background: var(--bg); color: var(-
 .welcome-bug-box .wbb-text a:hover { text-decoration: underline; }
 .welcome-go-btn {
   width: 100%; padding: 14px; border: none; border-radius: var(--radius);
-  background: var(--accent); color: #000; font-family: var(--font);
+  background: linear-gradient(180deg, #d8201f 0%, #a50000 100%);
+  color: #ffffff; font-family: var(--font);
   font-size: 15px; font-weight: 700; cursor: pointer; transition: all 0.15s;
-  letter-spacing: 0.02em; margin-top: 16px;
+  letter-spacing: 0.04em; margin-top: 16px; text-transform: uppercase;
+  box-shadow: 0 4px 14px rgba(195,0,0,0.35), 0 0 0 1px rgba(255,255,255,0.08) inset;
 }
-.welcome-go-btn:hover { background: var(--accent2); transform: translateY(-1px); }
+.welcome-go-btn:hover { background: linear-gradient(180deg, #e63b3b 0%, #b80000 100%); transform: translateY(-1px); box-shadow: 0 6px 18px rgba(195,0,0,0.5), 0 0 0 1px rgba(255,255,255,0.12) inset; }
 
 /* ── Update Available Popup ── */
 .update-popup-overlay {
@@ -596,15 +671,1078 @@ html, body { height: 100%; overflow: hidden; background: var(--bg); color: var(-
 .lt-adjust-row { display: flex; align-items: center; gap: 8px; margin-top: 6px; }
 .lt-adjust-label { font-size: 11px; color: var(--text3); font-family: var(--mono); min-width: 28px; }
 .lt-adjust-unit { font-size: 10px; color: var(--text3); font-family: var(--mono); }
+
+/* ── Merge view ── */
+.merge-file-list { margin-bottom: 8px; }
+.merge-file-item {
+  display: flex; align-items: center; gap: 8px; padding: 8px 10px;
+  background: var(--bg3); border: 1px solid var(--border); border-radius: 6px;
+  margin-bottom: 4px; transition: all 0.15s; cursor: grab; user-select: none;
+}
+.merge-file-item:hover { border-color: var(--border2); background: var(--bg4); }
+.merge-file-item.drag-over { border-color: var(--accent); border-style: dashed; }
+.merge-file-item.dragging { opacity: 0.4; }
+.merge-file-grip {
+  color: var(--text3); font-size: 10px; cursor: grab; padding: 0 2px; line-height: 1;
+}
+.merge-file-index {
+  font-size: 10px; font-family: var(--mono); color: var(--text3);
+  min-width: 16px; text-align: center; font-weight: 600;
+}
+.merge-file-name {
+  flex: 1; font-size: 12px; color: var(--text); overflow: hidden;
+  text-overflow: ellipsis; white-space: nowrap;
+}
+.merge-file-dur {
+  font-size: 10px; font-family: var(--mono); color: var(--text3); min-width: 44px; text-align: right;
+}
+.merge-file-remove {
+  width: 20px; height: 20px; border-radius: 4px; border: none;
+  background: transparent; color: var(--text3); cursor: pointer; font-size: 11px;
+  display: flex; align-items: center; justify-content: center; transition: all 0.15s;
+}
+.merge-file-remove:hover { color: var(--red); background: rgba(255,74,74,0.1); }
+.merge-header-row {
+  display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;
+}
+.merge-total-badge {
+  display: flex; align-items: center; gap: 8px;
+  background: rgba(195,0,0,0.10); border: 1px solid rgba(195,0,0,0.30);
+  border-radius: 6px; padding: 5px 12px;
+}
+.merge-total-label {
+  font-size: 10px; font-weight: 600; letter-spacing: 0.05em; color: var(--text3);
+  text-transform: uppercase;
+}
+.merge-total-duration {
+  font-size: 14px; font-weight: 800; color: var(--brand-red-2); font-family: var(--mono);
+}
+.merge-options-grid {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 0 20px;
+}
+.merge-options-grid .adv-feature-row { padding: 8px 0; }
+.merge-progress-wrap { margin-top: 10px; display: none; }
+.merge-progress-bar { height: 5px; background: var(--bg4); border-radius: 99px; overflow: hidden; }
+.merge-progress-fill { height: 100%; background: var(--accent); border-radius: 99px; transition: width 0.3s; width: 0%; }
+.merge-progress-text { font-size: 10px; font-family: var(--mono); color: var(--text3); margin-top: 4px; }
+.merge-error-msg { font-size: 11px; font-family: var(--mono); color: var(--red); margin-top: 6px; display: none; }
+
+/* Podcast drop highlight: when files are dragged anywhere over the view, ring the card */
+#view-podcast.podcast-dropping .card:first-of-type {
+  border-color: var(--accent2);
+  box-shadow: 0 0 0 2px rgba(230,59,59,0.18);
+  transition: border-color 0.12s, box-shadow 0.12s;
+}
+#view-podcast .convert-drop-zone.drag-over {
+  border-color: var(--accent2);
+  background: rgba(230,59,59,0.06);
+}
+.convert-drop-zone.drag-over {
+  border-color: var(--accent2);
+  background: rgba(230,59,59,0.06);
+}
+
+/* Podcast progress: bigger and more visible than the default merge bar */
+#podcast-progress-wrap {
+  margin-top: 14px;
+  padding: 14px 16px;
+  background: linear-gradient(180deg, rgba(255,255,255,0.03), rgba(255,255,255,0.01));
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+#podcast-progress-wrap .merge-progress-bar {
+  height: 12px;
+  background: rgba(255,255,255,0.06);
+  border-radius: 99px;
+  overflow: hidden;
+  position: relative;
+}
+#podcast-progress-wrap .merge-progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--brand-navy-2), var(--brand-red-2));
+  border-radius: 99px;
+  box-shadow: 0 0 10px rgba(195,0,0,0.35), inset 0 0 6px rgba(255,255,255,0.15);
+  transition: width 0.3s ease;
+}
+#podcast-progress-wrap .merge-progress-fill::after {
+  content: ''; position: absolute; inset: 0;
+  background: linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.10) 50%, transparent 100%);
+  background-size: 200% 100%;
+  animation: podcast-shimmer 1.6s linear infinite;
+  pointer-events: none;
+  border-radius: 99px;
+}
+@keyframes podcast-shimmer {
+  0%   { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+#podcast-progress-text {
+  font-size: 12px;
+  color: var(--text);
+  font-family: var(--mono);
+  font-weight: 500;
+  margin-top: 8px;
+  text-align: center;
+  letter-spacing: 0.02em;
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   v3.0 FUTURISTIC LAYER — glassmorphism, gradient mesh, neon glows
+   These override the v2 styles above so the app feels distinctly modern.
+   ═══════════════════════════════════════════════════════════════════ */
+
+html, body { font-family: 'Inter', 'Syne', sans-serif; }
+
+/* Animated mesh-gradient background — gives the whole app depth */
+body {
+  background:
+    radial-gradient(1100px 700px at 92% 8%, rgba(195,0,0,0.13), transparent 60%),
+    radial-gradient(1000px 700px at 8% 92%, rgba(29,20,90,0.55), transparent 55%),
+    radial-gradient(900px 600px at 50% 50%, rgba(42,30,133,0.10), transparent 65%),
+    #07061a;
+  background-attachment: fixed;
+}
+#app { background: transparent; }
+#main { background: transparent; }
+
+/* Subtle moving grain — tiny noise overlay for "futuristic" depth */
+body::before {
+  content: '';
+  position: fixed; inset: 0; pointer-events: none; z-index: 0;
+  background-image:
+    linear-gradient(rgba(255,255,255,0.012) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,255,255,0.012) 1px, transparent 1px);
+  background-size: 56px 56px;
+  mask-image: radial-gradient(ellipse 80% 70% at 50% 50%, #000 30%, transparent 90%);
+  -webkit-mask-image: radial-gradient(ellipse 80% 70% at 50% 50%, #000 30%, transparent 90%);
+}
+#app > * { position: relative; z-index: 1; }
+
+/* Titlebar — slim glass strip */
+#titlebar {
+  background: rgba(8,7,26,0.55);
+  backdrop-filter: blur(24px) saturate(140%);
+  -webkit-backdrop-filter: blur(24px) saturate(140%);
+  border-bottom: 1px solid rgba(255,255,255,0.04);
+  height: 44px;
+  box-shadow: none;
+}
+#titlebar-logo { gap: 11px; }
+#titlebar-logo .logo-mark { width: 26px; height: 26px; }
+#titlebar-logo .logo-text {
+  font-family: 'Inter', sans-serif;
+  font-size: 12px; font-weight: 700; letter-spacing: 0.16em; text-transform: uppercase;
+  color: rgba(255,255,255,0.92);
+}
+#titlebar-logo .logo-text span {
+  color: var(--brand-red-2); opacity: 1; font-weight: 600;
+}
+.tc-btn {
+  background: rgba(255,255,255,0.04);
+  width: 28px; height: 28px; border-radius: 8px;
+}
+.tc-btn:hover { background: rgba(255,255,255,0.10); }
+
+/* Sidebar — pure glass with thin red active indicator */
+#sidebar {
+  background: rgba(8,7,26,0.50);
+  backdrop-filter: blur(28px) saturate(140%);
+  -webkit-backdrop-filter: blur(28px) saturate(140%);
+  border-right: 1px solid rgba(255,255,255,0.04);
+  width: 224px;
+  padding: 24px 14px;
+}
+.sidebar-section { margin-bottom: 28px; }
+.sidebar-label {
+  font-family: 'Inter', sans-serif;
+  font-size: 9px; font-weight: 700; letter-spacing: 0.22em;
+  color: rgba(255,255,255,0.32);
+  padding: 0 13px; margin-bottom: 12px;
+}
+.nav-btn {
+  font-family: 'Inter', sans-serif;
+  font-size: 13px; font-weight: 500;
+  padding: 11px 14px; gap: 12px;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  margin-bottom: 3px;
+  color: rgba(255,255,255,0.6);
+  position: relative;
+  overflow: hidden;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.nav-btn svg { width: 17px; height: 17px; opacity: 0.55; transition: all 0.2s; }
+.nav-btn:hover {
+  background: rgba(255,255,255,0.04);
+  color: #fff;
+  border-color: rgba(255,255,255,0.06);
+}
+.nav-btn:hover svg { opacity: 0.95; }
+.nav-btn.active {
+  background:
+    linear-gradient(90deg, rgba(195,0,0,0.10), rgba(195,0,0,0.02) 40%, transparent 100%),
+    rgba(255,255,255,0.03);
+  border-color: rgba(255,255,255,0.05);
+  color: #ffffff;
+  font-weight: 600;
+}
+.nav-btn.active::before {
+  content: ''; position: absolute; left: 0; top: 8px; bottom: 8px;
+  width: 2px; border-radius: 99px;
+  background: linear-gradient(180deg, #ff4444, #c30000);
+  box-shadow: 0 0 12px #ff2d2d, 0 0 4px #ff2d2d;
+}
+.nav-btn.active svg { color: var(--brand-red-2); opacity: 1; }
+
+.sidebar-divider { background: rgba(255,255,255,0.05); margin: 16px 6px; }
+.version-badge {
+  background: rgba(255,255,255,0.025);
+  border: 1px solid rgba(255,255,255,0.05);
+  border-radius: 10px;
+}
+.version-badge .vb-label {
+  font-family: 'Inter', sans-serif;
+  font-size: 9px; letter-spacing: 0.18em; text-transform: uppercase;
+  color: rgba(255,255,255,0.35);
+}
+.version-badge .vb-value {
+  font-family: 'DM Mono', monospace;
+  font-size: 12px; font-weight: 500; color: #fff;
+}
+.credit-tag { font-family: 'Inter', sans-serif; font-size: 11px; color: rgba(255,255,255,0.30); }
+.credit-tag span { color: rgba(255,255,255,0.55); font-weight: 600; }
+
+/* Content area — more breathing room */
+#content { padding: 32px 40px 40px; }
+
+/* Page header — bold display type */
+.page-header { margin-bottom: 28px; }
+.page-title {
+  font-family: 'Syne', sans-serif;
+  font-size: 34px; font-weight: 800; letter-spacing: -0.025em;
+  margin-bottom: 6px;
+  line-height: 1.05;
+}
+.page-title span {
+  background: linear-gradient(135deg, #ff4d4d 0%, #c30000 60%, #8a0000 100%);
+  -webkit-background-clip: text; background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+.page-subtitle {
+  font-family: 'Inter', sans-serif;
+  font-size: 14px; color: rgba(255,255,255,0.45); font-weight: 400;
+}
+
+/* Glass cards — main visual identity of v3 */
+.card {
+  background: rgba(255,255,255,0.025);
+  backdrop-filter: blur(20px) saturate(140%);
+  -webkit-backdrop-filter: blur(20px) saturate(140%);
+  border: 1px solid rgba(255,255,255,0.06);
+  border-radius: 16px;
+  padding: 22px 24px;
+  margin-bottom: 14px;
+  box-shadow:
+    0 8px 28px -12px rgba(0,0,0,0.5),
+    inset 0 1px 0 rgba(255,255,255,0.04);
+}
+.card-title {
+  font-family: 'Inter', sans-serif;
+  font-size: 10px; font-weight: 700; letter-spacing: 0.20em;
+  color: rgba(255,255,255,0.40); text-transform: uppercase;
+  margin-bottom: 16px;
+}
+
+/* URL input — hero element */
+.url-input-wrap {
+  background: rgba(255,255,255,0.035);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 14px;
+  height: 58px;
+  padding: 7px 7px 7px 20px;
+  gap: 10px;
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.url-input-wrap:focus-within {
+  border-color: rgba(230,59,59,0.50);
+  background: rgba(255,255,255,0.05);
+  box-shadow:
+    0 0 0 4px rgba(195,0,0,0.10),
+    0 0 36px -6px rgba(195,0,0,0.45);
+}
+#url-input {
+  font-family: 'Inter', sans-serif;
+  font-size: 15px; font-weight: 400; letter-spacing: -0.005em;
+  color: #fff;
+}
+#url-input::placeholder { color: rgba(255,255,255,0.30); font-weight: 400; }
+
+/* Type select — modernized dropdown */
+.type-select {
+  background: rgba(255,255,255,0.05);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 10px;
+  font-family: 'Inter', sans-serif;
+  font-size: 12px; font-weight: 700;
+  letter-spacing: 0.12em; color: #fff;
+  padding: 0 32px 0 16px; cursor: pointer;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%23ffffff' opacity='0.6'/%3E%3C/svg%3E");
+}
+.type-select:hover { background-color: rgba(255,255,255,0.08); border-color: rgba(255,255,255,0.14); }
+
+/* Add button — neon primary */
+.add-btn {
+  font-family: 'Inter', sans-serif;
+  font-size: 12px; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase;
+  background: linear-gradient(135deg, #ff3d3d 0%, #c30000 50%, #8a0000 100%);
+  color: #fff;
+  border-radius: 10px;
+  padding: 0 28px;
+  border: 1px solid rgba(255,255,255,0.10);
+  box-shadow:
+    0 4px 18px -4px rgba(195,0,0,0.55),
+    inset 0 1px 0 rgba(255,255,255,0.22);
+  position: relative; overflow: hidden;
+}
+.add-btn:hover {
+  transform: translateY(-1px);
+  box-shadow:
+    0 8px 26px -4px rgba(195,0,0,0.65),
+    inset 0 1px 0 rgba(255,255,255,0.28);
+  background: linear-gradient(135deg, #ff5555 0%, #d8201f 50%, #a50000 100%);
+}
+.add-btn.download-mode {
+  background: linear-gradient(135deg, #4dffb8 0%, #22c97e 50%, #15a868 100%);
+  color: #001a0c;
+  box-shadow:
+    0 4px 18px -4px rgba(61,250,172,0.5),
+    inset 0 1px 0 rgba(255,255,255,0.30);
+}
+.add-btn.download-mode:hover {
+  background: linear-gradient(135deg, #5dffc8 0%, #2dd98b 50%, #1ab575 100%);
+  box-shadow:
+    0 8px 26px -4px rgba(61,250,172,0.6),
+    inset 0 1px 0 rgba(255,255,255,0.35);
+}
+
+/* Options row — gives toggles breathing room */
+.options-row {
+  margin-top: 18px;
+  padding-top: 16px;
+  border-top: 1px solid rgba(255,255,255,0.05);
+  gap: 22px;
+}
+
+/* Toggles — bigger, more tactile */
+.toggle { width: 40px; height: 22px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.10); }
+.toggle::after {
+  width: 14px; height: 14px; top: 3px; left: 3px;
+  background: rgba(255,255,255,0.55);
+  box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+}
+.toggle-wrap input:checked + .toggle {
+  background: linear-gradient(135deg, #ff3d3d, #c30000);
+  border-color: transparent;
+  box-shadow: 0 0 14px rgba(195,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.22);
+}
+.toggle-wrap input:checked + .toggle::after {
+  background: #fff; transform: translateX(18px);
+  box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+}
+.toggle-label {
+  font-family: 'Inter', sans-serif;
+  font-size: 13px; font-weight: 500;
+  color: rgba(255,255,255,0.65);
+}
+.toggle-wrap:hover .toggle-label { color: #fff; }
+
+/* Bandwidth input */
+.bw-input {
+  background: rgba(255,255,255,0.05);
+  border: 1px solid rgba(255,255,255,0.10);
+  border-radius: 7px; height: 28px;
+  font-family: 'DM Mono', monospace; color: #fff;
+}
+.bw-input:focus { border-color: var(--brand-red-2); background: rgba(255,255,255,0.08); }
+
+/* Buttons — glass + glow */
+.btn {
+  font-family: 'Inter', sans-serif;
+  font-weight: 600; letter-spacing: 0.04em;
+  border-radius: 9px; padding: 9px 16px;
+  transition: all 0.18s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.btn-ghost {
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.08);
+  color: rgba(255,255,255,0.75);
+}
+.btn-ghost:hover {
+  background: rgba(255,255,255,0.08);
+  border-color: rgba(255,255,255,0.14);
+  color: #fff;
+}
+.btn-primary {
+  background: linear-gradient(135deg, #ff3d3d 0%, #c30000 50%, #8a0000 100%);
+  border: 1px solid rgba(255,255,255,0.10);
+  color: #fff;
+  box-shadow:
+    0 4px 16px -4px rgba(195,0,0,0.45),
+    inset 0 1px 0 rgba(255,255,255,0.20);
+}
+.btn-primary:hover {
+  background: linear-gradient(135deg, #ff5555 0%, #d8201f 50%, #a50000 100%);
+  transform: translateY(-1px);
+  box-shadow:
+    0 8px 24px -4px rgba(195,0,0,0.6),
+    inset 0 1px 0 rgba(255,255,255,0.25);
+}
+.btn-danger {
+  background: rgba(255,82,82,0.10);
+  border: 1px solid rgba(255,82,82,0.30);
+  color: var(--red);
+}
+.btn-danger:hover { background: rgba(255,82,82,0.18); border-color: rgba(255,82,82,0.45); }
+
+/* Queue table — cleaner spacing */
+.queue-header { margin-bottom: 14px; }
+.queue-table th {
+  font-family: 'Inter', sans-serif;
+  font-size: 10px; letter-spacing: 0.16em;
+  color: rgba(255,255,255,0.32);
+  padding: 10px 14px;
+}
+.queue-table tbody tr {
+  border-color: rgba(255,255,255,0.04);
+  transition: background 0.15s;
+}
+.queue-table tbody tr:hover { background: rgba(255,255,255,0.025); }
+.queue-table td { font-family: 'Inter', sans-serif; padding: 14px 14px; font-size: 13px; }
+.td-url {
+  font-family: 'DM Mono', monospace;
+  color: rgba(255,255,255,0.55);
+}
+
+/* Status / type tags — pill-style neon */
+.status-tag {
+  font-family: 'Inter', sans-serif;
+  font-weight: 600; padding: 5px 11px; font-size: 11px;
+  border-radius: 99px; border: 1px solid;
+  letter-spacing: 0.02em;
+}
+.status-tag.queued { color: rgba(255,255,255,0.55); background: rgba(255,255,255,0.04); border-color: rgba(255,255,255,0.08); }
+.status-tag.downloading {
+  color: #ff8585;
+  background: rgba(195,0,0,0.12);
+  border-color: rgba(195,0,0,0.35);
+  box-shadow: 0 0 14px -4px rgba(195,0,0,0.5);
+}
+.status-tag.done { background: rgba(71,255,176,0.08); border-color: rgba(71,255,176,0.30); }
+.status-tag.error { background: rgba(255,82,82,0.10); border-color: rgba(255,82,82,0.35); }
+.status-tag.paused { background: rgba(255,170,71,0.10); border-color: rgba(255,170,71,0.32); }
+
+.type-tag {
+  font-family: 'Inter', sans-serif;
+  font-weight: 700; font-size: 10px;
+  letter-spacing: 0.12em; padding: 4px 10px;
+  border-radius: 99px; border: 1px solid;
+}
+.type-tag.mp4 { background: rgba(74,179,255,0.10); color: var(--blue); border-color: rgba(74,179,255,0.32); }
+.type-tag.mp3 { background: rgba(255,170,71,0.10); color: var(--orange); border-color: rgba(255,170,71,0.32); }
+
+/* Row download button */
+.row-download-btn {
+  font-family: 'Inter', sans-serif;
+  background: rgba(195,0,0,0.10);
+  border: 1px solid rgba(195,0,0,0.30);
+  border-radius: 7px;
+  font-size: 11px; font-weight: 700;
+  letter-spacing: 0.08em; padding: 6px 14px;
+}
+.row-download-btn:hover {
+  background: linear-gradient(135deg, #ff3d3d, #c30000);
+  border-color: transparent; color: #fff;
+  box-shadow: 0 4px 14px -4px rgba(195,0,0,0.5);
+}
+
+/* Empty queue — illustrated */
+.queue-empty {
+  padding: 64px 24px;
+  border: 1px dashed rgba(255,255,255,0.08);
+  border-radius: 14px;
+  background: radial-gradient(420px 200px at 50% 50%, rgba(195,0,0,0.05), transparent 70%);
+}
+.queue-empty .qe-icon { font-size: 48px; opacity: 0.35; }
+.queue-empty p {
+  font-family: 'Inter', sans-serif;
+  font-size: 14px; color: rgba(255,255,255,0.45); margin-top: 8px;
+}
+
+/* Progress — neon */
+.progress-bar-wrap { height: 4px; background: rgba(255,255,255,0.05); }
+.progress-bar-fill {
+  background: linear-gradient(90deg, #2a1e85, #c30000 60%, #ff4444);
+  box-shadow: 0 0 12px rgba(195,0,0,0.55);
+}
+
+/* Format buttons (Convert view) — segmented cards */
+.format-btn {
+  background: rgba(255,255,255,0.03);
+  border: 1px solid rgba(255,255,255,0.07);
+  border-radius: 14px;
+  padding: 22px 16px;
+  font-family: 'Inter', sans-serif;
+  transition: all 0.22s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.format-btn:hover {
+  background: rgba(255,255,255,0.05);
+  border-color: rgba(195,0,0,0.32);
+  color: #fff;
+  transform: translateY(-2px);
+}
+.format-btn.selected {
+  background:
+    linear-gradient(135deg, rgba(195,0,0,0.18), rgba(195,0,0,0.04)),
+    rgba(255,255,255,0.025);
+  border-color: rgba(195,0,0,0.55);
+  color: #fff;
+  box-shadow:
+    0 8px 24px -6px rgba(195,0,0,0.4),
+    inset 0 1px 0 rgba(255,255,255,0.08);
+}
+.format-btn .fb-ext { font-family: 'Syne', sans-serif; font-weight: 800; font-size: 22px; }
+
+/* Drop zones — modern */
+.convert-drop-zone {
+  border: 2px dashed rgba(255,255,255,0.10);
+  background: rgba(255,255,255,0.02);
+  border-radius: 14px;
+  padding: 52px 24px;
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.convert-drop-zone:hover {
+  border-color: rgba(195,0,0,0.45);
+  background: radial-gradient(420px 220px at 50% 50%, rgba(195,0,0,0.08), transparent 70%), rgba(255,255,255,0.03);
+  transform: translateY(-1px);
+}
+.convert-drop-zone .dz-icon { font-size: 48px; opacity: 0.4; }
+.convert-drop-zone p {
+  font-family: 'Inter', sans-serif;
+  font-size: 15px; color: rgba(255,255,255,0.75); font-weight: 500;
+}
+.convert-drop-zone span {
+  font-family: 'Inter', sans-serif;
+  font-size: 12px; color: rgba(255,255,255,0.35); letter-spacing: 0.04em;
+}
+
+/* Inputs — uniform modern look */
+.adv-input, .lt-text-input, .lt-size-input, .lt-duration-input, .sites-search, #report-url, #report-description {
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 8px;
+  color: #fff;
+  transition: all 0.18s;
+}
+.adv-input:focus, .lt-text-input:focus, .lt-size-input:focus, .lt-duration-input:focus, .sites-search:focus, #report-url:focus, #report-description:focus {
+  border-color: rgba(230,59,59,0.5);
+  background: rgba(255,255,255,0.06);
+  box-shadow: 0 0 0 3px rgba(195,0,0,0.10);
+  outline: none;
+}
+
+/* Advanced feature rows — divider lighter */
+.adv-feature-row { border-bottom-color: rgba(255,255,255,0.04); }
+
+/* Modal — full glass */
+.modal-overlay { background: rgba(0,0,0,0.55); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); }
+.modal {
+  background: rgba(14,11,32,0.85);
+  backdrop-filter: blur(40px) saturate(140%);
+  -webkit-backdrop-filter: blur(40px) saturate(140%);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 20px;
+  padding: 30px;
+  box-shadow:
+    0 24px 60px -16px rgba(0,0,0,0.7),
+    inset 0 1px 0 rgba(255,255,255,0.06);
+}
+.modal-title { font-family: 'Syne', sans-serif; font-size: 20px; font-weight: 800; letter-spacing: -0.01em; }
+.modal-close {
+  background: rgba(255,255,255,0.04);
+  border-radius: 8px;
+}
+.modal-close:hover { background: var(--brand-red); color: #fff; }
+
+/* Quality picker items */
+.quality-item {
+  background: rgba(255,255,255,0.025);
+  border: 1px solid rgba(255,255,255,0.06);
+  border-radius: 12px;
+  padding: 14px 18px;
+  transition: all 0.2s;
+}
+.quality-item:hover {
+  background:
+    linear-gradient(135deg, rgba(195,0,0,0.08), transparent),
+    rgba(255,255,255,0.04);
+  border-color: rgba(195,0,0,0.32);
+  transform: translateX(2px);
+}
+.quality-label { font-family: 'Inter', sans-serif; }
+.quality-badge.best-badge {
+  background: linear-gradient(135deg, #ff3d3d, #c30000);
+  color: #fff;
+  border-radius: 99px; padding: 4px 9px;
+}
+.quality-badge.res-badge {
+  background: rgba(255,255,255,0.06);
+  color: rgba(255,255,255,0.75);
+  border-radius: 99px; padding: 4px 9px;
+}
+
+/* Welcome modal — dramatic */
+.welcome-overlay { background: rgba(0,0,0,0.75); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); }
+.welcome-modal {
+  background: rgba(14,11,32,0.92);
+  backdrop-filter: blur(40px) saturate(140%);
+  -webkit-backdrop-filter: blur(40px) saturate(140%);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 22px;
+  padding: 36px 32px;
+  box-shadow:
+    0 30px 80px -20px rgba(0,0,0,0.8),
+    inset 0 1px 0 rgba(255,255,255,0.06);
+}
+.welcome-logo {
+  width: 80px; height: 80px; border-radius: 18px;
+  background: transparent; padding: 4px; margin-bottom: 18px;
+  box-shadow:
+    0 16px 36px -10px rgba(29,20,90,0.6),
+    0 4px 14px rgba(195,0,0,0.18);
+}
+.welcome-title { font-family: 'Syne', sans-serif; font-size: 26px; font-weight: 800; }
+.welcome-subtitle { font-family: 'Inter', sans-serif; color: rgba(255,255,255,0.55); }
+.welcome-step {
+  background: rgba(255,255,255,0.025);
+  border: 1px solid rgba(255,255,255,0.05);
+  border-radius: 12px;
+}
+.welcome-step-title { font-family: 'Inter', sans-serif; font-weight: 700; }
+.welcome-step-desc { font-family: 'Inter', sans-serif; color: rgba(255,255,255,0.50); }
+.welcome-folder-path {
+  background: rgba(0,0,0,0.3);
+  border: 1px solid rgba(255,255,255,0.06);
+  color: #fff;
+  font-family: 'DM Mono', monospace;
+}
+.welcome-bug-box {
+  background: rgba(255,255,255,0.025);
+  border: 1px solid rgba(255,255,255,0.05);
+  border-radius: 10px;
+}
+.welcome-go-btn {
+  background: linear-gradient(135deg, #ff3d3d 0%, #c30000 50%, #8a0000 100%);
+  color: #fff;
+  border-radius: 12px;
+  font-family: 'Inter', sans-serif;
+  font-size: 13px; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase;
+  box-shadow:
+    0 8px 24px -6px rgba(195,0,0,0.5),
+    inset 0 1px 0 rgba(255,255,255,0.22);
+}
+.welcome-go-btn:hover {
+  background: linear-gradient(135deg, #ff5555 0%, #d8201f 50%, #a50000 100%);
+  box-shadow:
+    0 12px 32px -6px rgba(195,0,0,0.6),
+    inset 0 1px 0 rgba(255,255,255,0.28);
+}
+
+/* Update / app-update popups */
+.update-popup, .app-update-popup {
+  background: rgba(14,11,32,0.92);
+  backdrop-filter: blur(40px) saturate(140%);
+  -webkit-backdrop-filter: blur(40px) saturate(140%);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 20px;
+  box-shadow:
+    0 24px 60px -16px rgba(0,0,0,0.7),
+    inset 0 1px 0 rgba(255,255,255,0.06);
+}
+
+/* Update card (yt-dlp) */
+.update-card {
+  background: rgba(255,255,255,0.025);
+  border: 1px solid rgba(255,255,255,0.06);
+  border-radius: 12px;
+  padding: 18px 22px;
+}
+.update-card .uc-name { font-family: 'Inter', sans-serif; font-weight: 700; }
+.update-card .uc-version { color: var(--brand-red-2); }
+
+/* Update log */
+.update-log {
+  background: rgba(0,0,0,0.35);
+  border: 1px solid rgba(255,255,255,0.05);
+  color: rgba(255,255,255,0.65);
+  border-radius: 10px;
+}
+
+/* Logs view */
+.logs-content {
+  background: rgba(0,0,0,0.35);
+  border: 1px solid rgba(255,255,255,0.05);
+  border-radius: 12px;
+  color: rgba(255,255,255,0.7);
+}
+
+/* Settings rows */
+.settings-row { border-bottom-color: rgba(255,255,255,0.05); }
+.settings-row .sr-label { font-family: 'Inter', sans-serif; font-weight: 600; }
+.settings-row .sr-desc { font-family: 'Inter', sans-serif; color: rgba(255,255,255,0.45); }
+
+/* Lower third / merge tweaks */
+.merge-file-item {
+  background: rgba(255,255,255,0.03);
+  border: 1px solid rgba(255,255,255,0.06);
+  border-radius: 10px;
+  padding: 10px 12px;
+}
+.merge-file-item:hover { background: rgba(255,255,255,0.05); border-color: rgba(255,255,255,0.12); }
+.merge-total-badge {
+  background: linear-gradient(135deg, rgba(195,0,0,0.15), rgba(195,0,0,0.04));
+  border: 1px solid rgba(195,0,0,0.32);
+  border-radius: 9px;
+}
+.merge-total-duration { color: var(--brand-red-2); }
+
+/* Warning banner — softer */
+.warning-banner {
+  background: rgba(255,82,82,0.05);
+  border: 1px solid rgba(255,82,82,0.20);
+  border-radius: 10px;
+}
+
+/* YouTube auth account info */
+#yt-account-info {
+  background: rgba(255,255,255,0.025) !important;
+  border: 1px solid rgba(71,255,176,0.25) !important;
+  border-radius: 10px !important;
+}
+
+/* Toast — glass pill */
+#toast {
+  background: rgba(14,11,32,0.85);
+  backdrop-filter: blur(24px) saturate(140%);
+  -webkit-backdrop-filter: blur(24px) saturate(140%);
+  border: 1px solid rgba(255,255,255,0.10);
+  border-radius: 12px;
+  font-family: 'Inter', sans-serif;
+  font-weight: 500;
+  box-shadow: 0 16px 40px -8px rgba(0,0,0,0.7);
+}
+
+/* Smooth scrollbar */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.08); border-radius: 99px; }
+::-webkit-scrollbar-thumb:hover { background: rgba(195,0,0,0.45); }
+
+/* Spinner */
+.spinner {
+  border-color: rgba(255,255,255,0.08);
+  border-top-color: var(--brand-red-2);
+  width: 16px; height: 16px;
+}
+
+/* Smoother view entry */
+@keyframes vfadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+.view.active { animation: vfadeIn 0.32s cubic-bezier(0.16, 1, 0.3, 1); }
+
+/* Site item — clickable look */
+.site-item {
+  font-family: 'DM Mono', monospace;
+  border-radius: 6px;
+  padding: 7px 10px;
+}
+.site-item:hover { background: rgba(255,255,255,0.05); color: #fff; }
+
+/* Subtle hover lift on all cards */
+.card:hover {
+  border-color: rgba(255,255,255,0.09);
+}
+
+/* Quality modal title row */
+#quality-modal-title { font-family: 'DM Mono', monospace; color: rgba(255,255,255,0.55); }
+
+/* ═══════════════════════════════════════════════════════════════════
+   Hero card — 3-step Add-to-Queue UX (format → link → options)
+   ═══════════════════════════════════════════════════════════════════ */
+.hero-card { padding: 26px 28px; }
+
+.step-label {
+  display: flex; align-items: center; gap: 10px;
+  font-family: 'Inter', sans-serif;
+  font-size: 11px; font-weight: 700; letter-spacing: 0.16em;
+  text-transform: uppercase; color: rgba(255,255,255,0.55);
+  margin-bottom: 12px;
+}
+.step-num {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 20px; height: 20px; border-radius: 99px;
+  background: linear-gradient(135deg, rgba(195,0,0,0.25), rgba(195,0,0,0.08));
+  border: 1px solid rgba(195,0,0,0.40);
+  color: #ff8585; font-size: 11px; font-weight: 800; letter-spacing: 0;
+}
+.step-hint {
+  font-size: 10px; font-weight: 500; letter-spacing: 0.06em; text-transform: none;
+  color: rgba(255,255,255,0.30); margin-left: 2px;
+}
+
+/* Format segmented control — compact pill bar (Apple-style) */
+.format-seg {
+  display: inline-flex;
+  gap: 3px;
+  padding: 3px;
+  background: rgba(0,0,0,0.30);
+  border: 1px solid rgba(255,255,255,0.06);
+  border-radius: 99px;
+  width: fit-content;
+}
+.seg-btn {
+  display: inline-flex; align-items: center; gap: 7px;
+  padding: 7px 16px;
+  background: transparent;
+  border: none;
+  border-radius: 99px;
+  color: rgba(255,255,255,0.55);
+  font-family: 'Inter', sans-serif;
+  font-size: 11px; font-weight: 700;
+  letter-spacing: 0.14em; text-transform: uppercase;
+  cursor: pointer;
+  transition: all 0.18s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.seg-btn svg { width: 13px; height: 13px; flex-shrink: 0; opacity: 0.75; }
+.seg-btn .seg-text { display: contents; }
+.seg-btn .seg-name { font-size: 11px; font-weight: 700; letter-spacing: 0.14em; line-height: 1; }
+.seg-btn .seg-meta { display: none; }
+.seg-btn:hover { color: #fff; background: rgba(255,255,255,0.04); }
+.seg-btn:hover svg { opacity: 1; }
+.seg-btn.active {
+  background: linear-gradient(135deg, #ff3d3d 0%, #c30000 100%);
+  color: #fff;
+  box-shadow: 0 2px 12px -3px rgba(195,0,0,0.55), inset 0 1px 0 rgba(255,255,255,0.18);
+}
+.seg-btn.active svg { color: #fff; opacity: 1; }
+
+/* URL input — with icon prefix */
+.hero-card .url-input-wrap {
+  height: 56px;
+  padding: 6px 6px 6px 18px;
+  gap: 10px;
+  display: flex;
+  align-items: center;
+}
+.url-icon {
+  width: 18px; height: 18px;
+  color: rgba(255,255,255,0.35);
+  flex-shrink: 0;
+  transition: color 0.2s;
+}
+.hero-card .url-input-wrap:focus-within .url-icon { color: var(--brand-red-2); }
+.hero-card #url-input {
+  font-family: 'DM Mono', monospace;
+  font-size: 13px;
+  letter-spacing: 0;
+}
+.hero-card #url-input::placeholder { font-family: 'DM Mono', monospace; }
+
+/* Options chips — replaces the cluttered toggle row */
+.options-chips {
+  display: flex; flex-wrap: wrap; gap: 8px; align-items: center;
+}
+.chip { cursor: pointer; user-select: none; }
+.chip input[type=checkbox] { display: none; }
+.chip-pill {
+  display: inline-flex; align-items: center; gap: 8px;
+  padding: 8px 14px;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 99px;
+  font-family: 'Inter', sans-serif;
+  font-size: 12px; font-weight: 500;
+  color: rgba(255,255,255,0.70);
+  transition: all 0.18s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.chip-pill svg {
+  width: 13px; height: 13px;
+  opacity: 0.65; flex-shrink: 0;
+  transition: all 0.18s;
+}
+.chip:hover .chip-pill {
+  background: rgba(255,255,255,0.07);
+  border-color: rgba(255,255,255,0.16);
+  color: #fff;
+  transform: translateY(-1px);
+}
+.chip:hover .chip-pill svg { opacity: 1; }
+.chip input:checked + .chip-pill {
+  background: linear-gradient(135deg, rgba(195,0,0,0.22), rgba(195,0,0,0.08));
+  border-color: rgba(195,0,0,0.50);
+  color: #fff;
+  font-weight: 600;
+  box-shadow: 0 0 16px -4px rgba(195,0,0,0.45);
+}
+.chip input:checked + .chip-pill svg {
+  color: #ff5e5e; opacity: 1;
+}
+
+/* Inline bandwidth input — matches chip pill */
+.bw-inline {
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 99px;
+  color: #fff;
+  font-family: 'DM Mono', monospace;
+  font-size: 12px;
+  height: 34px;
+  padding: 0 14px;
+  width: 108px;
+  outline: none;
+  text-align: center;
+}
+.bw-inline:focus {
+  border-color: rgba(230,59,59,0.5);
+  background: rgba(255,255,255,0.07);
+  box-shadow: 0 0 0 3px rgba(195,0,0,0.10);
+}
+.bw-unit-inline {
+  font-family: 'DM Mono', monospace;
+  font-size: 11px;
+  color: rgba(255,255,255,0.40);
+  letter-spacing: 0.04em;
+}
+
+/* Native <option> safety net — in case any select is ever shown again */
+option {
+  background-color: #14112c;
+  color: #ffffff;
+}
+
+/* Hero card layout */
+.hero-card { padding: 22px 24px; }
+.hero-top-row {
+  display: flex; align-items: center; justify-content: flex-start;
+  margin-bottom: 14px;
+}
+.hero-card .url-input-wrap {
+  margin-bottom: 16px;
+}
+
+/* Options chips row */
+.options-chips {
+  padding-top: 14px;
+  border-top: 1px solid rgba(255,255,255,0.05);
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   Advanced panel — each option becomes a feature card with right-side
+   toggle, clean description, and an inset body when enabled.
+   ═══════════════════════════════════════════════════════════════════ */
+.adv-panel { padding: 22px 24px; }
+.adv-panel .card-title { margin-bottom: 14px; }
+
+.adv-feature-row {
+  padding: 14px 16px;
+  margin-bottom: 8px;
+  background: rgba(255,255,255,0.022);
+  border: 1px solid rgba(255,255,255,0.06);
+  border-radius: 12px;
+  position: relative;
+  transition: all 0.22s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.adv-feature-row:last-child { margin-bottom: 0; border-bottom: 1px solid rgba(255,255,255,0.06); }
+.adv-feature-row:hover {
+  background: rgba(255,255,255,0.038);
+  border-color: rgba(255,255,255,0.11);
+}
+/* When the toggle is checked, give the card a red ambient glow */
+.adv-feature-row:has(> .toggle-wrap input:checked) {
+  background:
+    linear-gradient(90deg, rgba(195,0,0,0.10), rgba(195,0,0,0.02) 55%, transparent),
+    rgba(255,255,255,0.025);
+  border-color: rgba(195,0,0,0.30);
+  box-shadow:
+    inset 2px 0 0 #ff4d4d,
+    0 0 20px -10px rgba(195,0,0,0.40);
+}
+
+/* Toggle stays at top-left of each card, larger and bolder label */
+.adv-feature-row > .toggle-wrap { gap: 11px; }
+.adv-feature-row > .toggle-wrap .toggle-label {
+  font-family: 'Inter', sans-serif;
+  font-size: 13px; font-weight: 600;
+  color: rgba(255,255,255,0.92);
+  letter-spacing: 0.005em;
+}
+
+/* Kill the inline margin-left:44px on hints and bodies — let them reflow */
+.adv-feature-row > .adv-hint,
+.adv-feature-row > .adv-hint[style*="margin-left"] {
+  margin-left: 0 !important;
+  padding-left: 51px;
+  margin-top: 4px;
+  font-family: 'Inter', sans-serif;
+  font-size: 11px;
+  color: rgba(255,255,255,0.42);
+  letter-spacing: 0.005em;
+}
+
+/* Feature body (expanded inputs) */
+.adv-feature-body,
+.adv-feature-row > .adv-feature-body {
+  margin: 12px 0 0 0 !important;
+  padding: 12px 14px;
+  background: rgba(0,0,0,0.20);
+  border: 1px solid rgba(255,255,255,0.04);
+  border-radius: 9px;
+}
+.adv-row { gap: 10px; }
+
+/* Range slider inside feature body */
+.adv-feature-body input[type=range] {
+  accent-color: var(--brand-red-2);
+  height: 4px;
+}
+
+/* Warn / error within feature body */
+.adv-warn, .adv-error {
+  margin-top: 6px;
+  font-family: 'Inter', sans-serif;
+  font-size: 10.5px;
+  letter-spacing: 0.01em;
+}
+
+/* Tighter and prettier adv-input fields */
+.adv-feature-row .adv-input {
+  height: 32px; padding: 0 12px;
+  font-family: 'DM Mono', monospace;
+  font-size: 12px;
+}
+.adv-feature-row .adv-input-wide { width: 240px; }
 </style>
 </head>
 <body>
+<script>
+  // Tag the body with the platform so platform-specific CSS rules can apply.
+  // window.api is exposed by preload.js (contextIsolation: true).
+  if (window.api && window.api.isMac) document.body.classList.add('mac');
+</script>
 
 <div id="app">
   <!-- Titlebar -->
   <div id="titlebar">
     <div id="titlebar-logo">
-      <div class="logo-mark">R</div>
+      <div class="logo-mark"><img src="../../assets/logo.png" alt="RAV"/></div>
       <div class="logo-text">RAV<span>downloader</span></div>
     </div>
     <div id="titlebar-controls">
@@ -635,6 +1773,18 @@ html, body { height: 100%; overflow: hidden; background: var(--bg); color: var(-
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="14" width="20" height="7" rx="1"/><line x1="6" y1="17" x2="14" y2="17"/><line x1="6" y1="19" x2="11" y2="19"/></svg>
           Lower Third
         </button>
+        <button class="nav-btn" data-view="merge" onclick="switchView(this)">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 3h5v5"/><path d="M8 3H3v5"/><path d="M12 22v-8.5a4.5 4.5 0 00-4.5-4.5H3"/><path d="M21 3l-8.5 8.5"/><path d="M12 22v-8.5a4.5 4.5 0 014.5-4.5H21"/><path d="M3 3l8.5 8.5"/></svg>
+          Merge
+        </button>
+        <button class="nav-btn" data-view="podcast" onclick="switchView(this)">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 1a4 4 0 0 0-4 4v7a4 4 0 0 0 8 0V5a4 4 0 0 0-4-4z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
+          Podcast
+        </button>
+        <button class="nav-btn" data-view="timecalc" onclick="switchView(this)">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+          Time Calc
+        </button>
       </div>
       <div class="sidebar-section">
         <div class="sidebar-label">Tools</div>
@@ -662,7 +1812,7 @@ html, body { height: 100%; overflow: hidden; background: var(--bg); color: var(-
           <div class="vb-value" id="sidebar-version">Loading...</div>
         </div>
         <div class="credit-tag">Developed by <span>Colin Christy</span></div>
-        <div class="credit-tag" style="margin-top:0;opacity:0.6" id="sidebar-app-version">v2.1.0</div>
+        <div class="credit-tag" style="margin-top:0;opacity:0.6" id="sidebar-app-version">v3.0.2</div>
       </div>
     </div>
 
@@ -673,43 +1823,67 @@ html, body { height: 100%; overflow: hidden; background: var(--bg); color: var(-
       <div class="view active" id="view-downloader">
         <div class="page-header">
           <div class="page-title">Download <span>anything.</span></div>
-          <div class="page-subtitle">Paste a URL, pick your format, add to queue — done.</div>
+          <div class="page-subtitle">Paste a link, pick a format, hit add. That's it.</div>
         </div>
 
-        <div class="card">
-          <div class="card-title">Add to Queue</div>
+        <div class="card hero-card">
+          <!-- Compact format pill bar -->
+          <div class="hero-top-row">
+            <div class="format-seg">
+              <button type="button" class="seg-btn active" data-fmt="mp4" onclick="selectFormat(this)">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="5" width="20" height="14" rx="2"/><path d="M10 9l5 3-5 3z" fill="currentColor"/></svg>
+                <span class="seg-name">MP4</span>
+              </button>
+              <button type="button" class="seg-btn" data-fmt="mp3" onclick="selectFormat(this)">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
+                <span class="seg-name">MP3</span>
+              </button>
+            </div>
+          </div>
+          <!-- Hidden select preserved for JS compatibility -->
+          <select id="type-select" style="display:none">
+            <option value="mp4">MP4</option>
+            <option value="mp3">MP3</option>
+          </select>
+
+          <!-- URL + action -->
           <div class="url-input-wrap">
-            <input type="text" id="url-input" placeholder="Paste video link here…" autocomplete="off" spellcheck="false"/>
-            <select class="type-select" id="type-select">
-              <option value="mp4">MP4</option>
-              <option value="mp3">MP3</option>
-            </select>
+            <svg class="url-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+            <input type="text" id="url-input" placeholder="Paste video link…" autocomplete="off" spellcheck="false"/>
             <button class="add-btn" id="main-action-btn" onclick="addToQueue()">+ Add to Queue</button>
           </div>
-          <div class="options-row">
-            <label class="toggle-wrap">
+
+          <!-- Options as chips -->
+          <div class="options-chips">
+            <label class="chip" title="Skip the queue — download starts immediately">
               <input type="checkbox" id="auto-download-toggle"/>
-              <div class="toggle"></div>
-              <span class="toggle-label">Auto Download (skip queue)</span>
+              <span class="chip-pill">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2L4 14h7l-1 8 9-12h-7l1-8z" fill="currentColor"/></svg>
+                <span>Skip Queue</span>
+              </span>
             </label>
-            <label class="toggle-wrap">
+            <label class="chip" title="Download all videos in a playlist">
               <input type="checkbox" id="playlist-toggle"/>
-              <div class="toggle"></div>
-              <span class="toggle-label">Playlist mode</span>
+              <span class="chip-pill">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><circle cx="3.5" cy="6" r="1"/><circle cx="3.5" cy="12" r="1"/><circle cx="3.5" cy="18" r="1"/></svg>
+                <span>Playlist</span>
+              </span>
             </label>
-            <div class="bandwidth-wrap">
-              <label class="toggle-wrap">
-                <input type="checkbox" id="bw-enable-toggle"/>
-                <div class="toggle"></div>
-                <span class="toggle-label">Limit bandwidth</span>
-              </label>
-              <input type="number" class="bw-input" id="bw-input" placeholder="2048" style="display:none"/>
-              <span class="bw-unit" id="bw-unit" style="display:none">KB/s</span>
-            </div>
-            <label class="toggle-wrap">
+            <label class="chip" title="Cap your download speed">
+              <input type="checkbox" id="bw-enable-toggle"/>
+              <span class="chip-pill">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20a8 8 0 1 0-8-8"/><path d="M12 12l5-3"/></svg>
+                <span>Limit Speed</span>
+              </span>
+            </label>
+            <input type="number" class="bw-inline" id="bw-input" placeholder="KB/s" style="display:none"/>
+            <span class="bw-unit-inline" id="bw-unit" style="display:none">KB/s</span>
+            <label class="chip" title="Trim, blur, source bug, limiter, custom filename and more">
               <input type="checkbox" id="advanced-toggle" onchange="toggleAdvancedPanel()"/>
-              <div class="toggle"></div>
-              <span class="toggle-label">Advanced</span>
+              <span class="chip-pill">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 1v6m0 10v6m11-11h-6M7 12H1m17.07-7.07l-4.24 4.24M9.17 14.83l-4.24 4.24m0-14.14l4.24 4.24m5.66 5.66l4.24 4.24"/></svg>
+                <span>Advanced</span>
+              </span>
             </label>
           </div>
         </div>
@@ -830,6 +2004,10 @@ html, body { height: 100%; overflow: hidden; background: var(--bg); color: var(-
               <span class="fb-ext">PNG</span>
               <small style="color:var(--text3);font-size:11px">AVIF, HEIC, JPG, WEBP, PDF → PNG</small>
             </div>
+            <div class="format-btn" id="fmt-jpg" onclick="selectConvertFormat('jpg')">
+              <span class="fb-ext">JPG</span>
+              <small style="color:var(--text3);font-size:11px">AVIF, HEIC, PNG, WEBP, PDF → JPG</small>
+            </div>
             <div class="format-btn" id="fmt-mp4" onclick="selectConvertFormat('mp4')">
               <span class="fb-ext">MP4</span>
               <small style="color:var(--text3);font-size:11px">MOV, MKV, AVI, WEBM → MP4</small>
@@ -838,9 +2016,9 @@ html, body { height: 100%; overflow: hidden; background: var(--bg); color: var(-
         </div>
         <div class="card">
           <div class="card-title">Files to Convert</div>
-          <div class="convert-drop-zone" onclick="pickConvertFiles()">
+          <div class="convert-drop-zone" id="convert-drop-zone" onclick="pickConvertFiles()">
             <div class="dz-icon">📂</div>
-            <p>Click to select files</p>
+            <p>Click to select files, or drop them here</p>
             <span>Multi-select supported</span>
           </div>
           <div class="convert-files-list" id="convert-files-list"></div>
@@ -858,7 +2036,7 @@ html, body { height: 100%; overflow: hidden; background: var(--bg); color: var(-
           <div class="card-title">Source File</div>
           <div class="convert-drop-zone" id="ext-drop-zone" onclick="pickExtractorFile()">
             <div class="dz-icon">🎵</div>
-            <p id="ext-file-label">Click to select a video file</p>
+            <p id="ext-file-label">Click to select a video file, or drop one here</p>
             <span>MP4, MOV, MKV, AVI, WEBM</span>
           </div>
         </div>
@@ -1002,6 +2180,257 @@ html, body { height: 100%; overflow: hidden; background: var(--bg); color: var(-
           </div>
           <div class="lt-error-msg" id="lt-export-error"></div>
         </div>
+
+      </div>
+
+      <!-- ── MERGE VIEW ── -->
+      <div class="view" id="view-merge">
+        <div class="page-header">
+          <div class="page-title">Merge <span>clips.</span></div>
+          <div class="page-subtitle">Combine multiple video files into one clip.</div>
+        </div>
+
+        <!-- File list + total duration -->
+        <div class="card">
+          <div class="merge-header-row">
+            <div class="card-title" style="margin-bottom:0">Clips</div>
+            <div class="merge-total-badge" id="merge-total-badge" style="display:none">
+              <span class="merge-total-label">Total</span>
+              <span class="merge-total-duration" id="merge-total-duration">0:00</span>
+            </div>
+          </div>
+          <div id="merge-empty-state">
+            <div class="convert-drop-zone" onclick="pickMergeFiles()" style="padding:28px">
+              <div class="dz-icon" style="font-size:32px;margin-bottom:8px">🎬</div>
+              <p>Click to select video files</p>
+              <span>Drag to reorder after adding</span>
+            </div>
+          </div>
+          <div class="merge-file-list" id="merge-file-list"></div>
+          <div id="merge-list-actions" style="display:none;margin-top:6px">
+            <div style="display:flex;gap:6px">
+              <button class="btn btn-ghost" onclick="pickMergeFilesAdd()" style="font-size:11px;padding:5px 12px;flex:1">+ Add More</button>
+              <button class="btn btn-ghost" onclick="clearMergeFiles()" style="font-size:11px;padding:5px 12px;color:var(--red);border-color:rgba(255,74,74,0.2)">Clear All</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Options + export -->
+        <div class="card" id="merge-options-card" style="display:none">
+          <div class="card-title">Options</div>
+          <div id="merge-res-warning" style="display:none;padding:10px 14px;background:rgba(255,170,71,0.08);border:1px solid rgba(255,170,71,0.25);border-radius:var(--radius-sm);margin-bottom:12px;font-size:12px;color:var(--orange)">
+            &#9888; Clips have different resolutions. It is recommended to select <strong>Force 720p</strong> or <strong>Force 1080p</strong> below for a consistent output.
+          </div>
+          <div class="merge-options-grid">
+            <div class="adv-feature-row">
+              <label class="toggle-wrap">
+                <input type="checkbox" id="merge-720p-toggle" onchange="mergeResToggle('720p')"/>
+                <div class="toggle"></div>
+                <span class="toggle-label">Force 720p</span>
+              </label>
+            </div>
+            <div class="adv-feature-row">
+              <label class="toggle-wrap">
+                <input type="checkbox" id="merge-1080p-toggle" onchange="mergeResToggle('1080p')"/>
+                <div class="toggle"></div>
+                <span class="toggle-label">Force 1080p</span>
+              </label>
+            </div>
+            <div class="adv-feature-row">
+              <label class="toggle-wrap">
+                <input type="checkbox" id="merge-limiter-toggle"/>
+                <div class="toggle"></div>
+                <span class="toggle-label">-12dB Hard Limiter</span>
+              </label>
+            </div>
+            <div class="adv-feature-row">
+              <label class="toggle-wrap">
+                <input type="checkbox" id="merge-noaudio-toggle"/>
+                <div class="toggle"></div>
+                <span class="toggle-label">Remove Audio</span>
+              </label>
+            </div>
+            <div class="adv-feature-row">
+              <label class="toggle-wrap">
+                <input type="checkbox" id="merge-dissolve-toggle"/>
+                <div class="toggle"></div>
+                <span class="toggle-label">Cross Dissolve</span>
+              </label>
+            </div>
+            <div class="adv-feature-row">
+              <label class="toggle-wrap">
+                <input type="checkbox" id="merge-dipwhite-toggle"/>
+                <div class="toggle"></div>
+                <span class="toggle-label">Dip to White</span>
+              </label>
+            </div>
+          </div>
+          <div class="adv-feature-row" style="border-bottom:none;padding-bottom:0">
+            <label class="toggle-wrap">
+              <input type="checkbox" id="merge-filename-toggle" onchange="document.getElementById('merge-filename-body').style.display=this.checked?'':'none'"/>
+              <div class="toggle"></div>
+              <span class="toggle-label">Custom Filename</span>
+            </label>
+            <div class="adv-feature-body" id="merge-filename-body" style="display:none">
+              <div class="adv-row" style="margin-top:6px">
+                <input type="text" class="adv-input" id="merge-filename-input" placeholder="merged_clip" spellcheck="false" autocomplete="off" style="flex:1"/>
+                <span style="font-size:12px;color:var(--text3);font-family:var(--mono)">.mp4</span>
+              </div>
+            </div>
+          </div>
+          <button class="btn btn-primary" id="merge-start-btn" onclick="startMerge()" style="width:100%;padding:12px;font-size:14px;margin-top:14px">&#9654; Merge Videos</button>
+          <div class="merge-progress-wrap" id="merge-progress-wrap">
+            <div class="merge-progress-bar"><div class="merge-progress-fill" id="merge-progress-fill"></div></div>
+            <div class="merge-progress-text" id="merge-progress-text">Starting...</div>
+          </div>
+          <div class="merge-error-msg" id="merge-export-error"></div>
+        </div>
+      </div>
+
+      <!-- ── PODCAST VIEW ── -->
+      <div class="view" id="view-podcast">
+        <div class="page-header">
+          <div class="page-title">Podcast <span>builder.</span></div>
+          <div class="page-subtitle">Merge blocks into one MP4 + MP3, with ad-roll time codes between every clip.</div>
+        </div>
+
+        <!-- File list + total duration -->
+        <div class="card">
+          <div class="merge-header-row">
+            <div class="card-title" style="margin-bottom:0">Blocks</div>
+            <div class="merge-total-badge" id="podcast-total-badge" style="display:none">
+              <span class="merge-total-label">Total</span>
+              <span class="merge-total-duration" id="podcast-total-duration">0:00</span>
+            </div>
+          </div>
+          <div id="podcast-empty-state">
+            <div class="convert-drop-zone" id="podcast-drop-zone" onclick="pickPodcastFiles()" style="padding:28px">
+              <div class="dz-icon" style="font-size:32px;margin-bottom:8px">&#127908;</div>
+              <p>Click to select clips, or drop files here</p>
+              <span>Drag rows to reorder &mdash; order is the order they air</span>
+            </div>
+          </div>
+          <div class="merge-file-list" id="podcast-file-list"></div>
+          <div id="podcast-list-actions" style="display:none;margin-top:6px">
+            <div style="display:flex;gap:6px">
+              <button class="btn btn-ghost" onclick="pickPodcastFilesAdd()" style="font-size:11px;padding:5px 12px;flex:1">+ Add More</button>
+              <button class="btn btn-ghost" onclick="clearPodcastFiles()" style="font-size:11px;padding:5px 12px;color:var(--red);border-color:rgba(255,74,74,0.2)">Clear All</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Options + export -->
+        <div class="card" id="podcast-options-card" style="display:none">
+          <div class="card-title">Options</div>
+
+          <div class="merge-options-grid">
+            <div class="adv-feature-row">
+              <label class="toggle-wrap">
+                <input type="checkbox" id="podcast-export-mp4-toggle" checked/>
+                <div class="toggle"></div>
+                <span class="toggle-label">Export MP4</span>
+              </label>
+            </div>
+            <div class="adv-feature-row">
+              <label class="toggle-wrap">
+                <input type="checkbox" id="podcast-export-mp3-toggle" checked/>
+                <div class="toggle"></div>
+                <span class="toggle-label">Export MP3</span>
+              </label>
+            </div>
+            <div class="adv-feature-row">
+              <label class="toggle-wrap">
+                <input type="checkbox" id="podcast-limiter-toggle"/>
+                <div class="toggle"></div>
+                <span class="toggle-label">-12dB Hard Limiter</span>
+              </label>
+            </div>
+            <div class="adv-feature-row">
+              <label class="toggle-wrap">
+                <input type="checkbox" id="podcast-use-blockA-toggle" checked onchange="syncPodcastFilenameFromBlockA(true)"/>
+                <div class="toggle"></div>
+                <span class="toggle-label">Use Block A filename</span>
+              </label>
+            </div>
+          </div>
+
+          <div class="adv-feature-row" style="border-bottom:none;padding-bottom:0">
+            <div style="font-size:12px;color:var(--text2);font-weight:600;margin-bottom:6px">Filename</div>
+            <div class="adv-row">
+              <input type="text" class="adv-input" id="podcast-filename-input" placeholder="my_podcast_episode" spellcheck="false" autocomplete="off" style="flex:1" oninput="onPodcastFilenameEdit()"/>
+              <span id="podcast-ext-hint" style="font-size:12px;color:var(--text3);font-family:var(--mono)">.mp4 + .mp3</span>
+            </div>
+            <div style="font-size:11px;color:var(--text3);margin-top:6px;font-family:var(--mono)">Both files save to your download folder with the same name.</div>
+          </div>
+
+          <button class="btn btn-primary" id="podcast-start-btn" onclick="startPodcast()" style="width:100%;padding:12px;font-size:14px;margin-top:14px">&#9654; Build Podcast</button>
+          <div class="merge-progress-wrap" id="podcast-progress-wrap">
+            <div class="merge-progress-bar"><div class="merge-progress-fill" id="podcast-progress-fill"></div></div>
+            <div class="merge-progress-text" id="podcast-progress-text">Starting...</div>
+          </div>
+          <div class="merge-error-msg" id="podcast-export-error"></div>
+        </div>
+      </div>
+
+      <!-- ── TIME CALC VIEW ── -->
+      <div class="view" id="view-timecalc">
+        <div class="page-header">
+          <div class="page-title">Time <span>calculator.</span></div>
+          <div class="page-subtitle">Add up times by hand or by dropping in files.</div>
+        </div>
+
+        <div class="card">
+          <div class="format-seg" style="margin-bottom:16px">
+            <button type="button" class="seg-btn active" data-tc-mode="manual" onclick="tcSwitchMode(this)">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 19V5"/><path d="M5 12h14"/></svg>
+              <span class="seg-name">Manual</span>
+            </button>
+            <button type="button" class="seg-btn" data-tc-mode="files" onclick="tcSwitchMode(this)">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+              <span class="seg-name">Files</span>
+            </button>
+          </div>
+
+          <!-- Manual mode -->
+          <div id="tc-manual-panel">
+            <div id="tc-rows"></div>
+            <div style="display:flex;gap:6px;margin-top:6px">
+              <button class="btn btn-ghost" onclick="tcAddRow()" style="font-size:11px;padding:5px 12px;flex:1">+ Add Time</button>
+              <button class="btn btn-ghost" onclick="tcClearRows()" style="font-size:11px;padding:5px 12px;color:var(--red);border-color:rgba(255,74,74,0.2)">Clear All</button>
+            </div>
+            <div style="font-size:11px;color:var(--text3);margin-top:8px;font-family:var(--mono)">Formats: <code>HH:MM:SS.mmm</code> · <code>MM:SS</code> · <code>90</code> (seconds)</div>
+          </div>
+
+          <!-- Files mode -->
+          <div id="tc-files-panel" style="display:none">
+            <div id="tc-empty-state">
+              <div class="convert-drop-zone" id="tc-drop-zone" onclick="tcPickFiles()" style="padding:28px">
+                <div class="dz-icon" style="font-size:32px;margin-bottom:8px">&#128338;</div>
+                <p>Click to pick files, or drop them here</p>
+                <span>Audio or video — durations will be summed</span>
+              </div>
+            </div>
+            <div class="merge-file-list" id="tc-file-list"></div>
+            <div id="tc-files-actions" style="display:none;margin-top:6px">
+              <div style="display:flex;gap:6px">
+                <button class="btn btn-ghost" onclick="tcPickFilesAdd()" style="font-size:11px;padding:5px 12px;flex:1">+ Add More</button>
+                <button class="btn btn-ghost" onclick="tcClearFiles()" style="font-size:11px;padding:5px 12px;color:var(--red);border-color:rgba(255,74,74,0.2)">Clear All</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Total card -->
+        <div class="card" id="tc-total-card">
+          <div style="display:flex;align-items:center;justify-content:space-between;gap:14px">
+            <div>
+              <div style="font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:0.08em;font-weight:700">Total</div>
+              <div id="tc-total" style="font-size:32px;font-weight:800;font-family:var(--mono);color:var(--accent2);line-height:1.1;margin-top:4px">00:00:00</div>
+              <div id="tc-total-sub" style="font-size:11px;color:var(--text3);font-family:var(--mono);margin-top:4px">0 items · 0.00s</div>
+            </div>
+            <button class="btn btn-ghost" onclick="tcCopyTotal()" style="font-size:11px;padding:8px 14px" title="Copy total to clipboard">Copy</button>
+          </div>
+        </div>
       </div>
 
       <!-- ── UPDATE VIEW ── -->
@@ -1024,6 +2453,15 @@ html, body { height: 100%; overflow: hidden; background: var(--bg); color: var(-
               <input type="checkbox" id="nightly-toggle" checked style="accent-color:var(--accent);width:14px;height:14px">
               Use nightly builds <span style="font-size:11px;color:var(--text3);font-family:var(--mono)">(github.com/yt-dlp/yt-dlp-nightly-builds)</span>
             </label>
+          </div>
+          <div id="update-progress-area" style="display:none;margin-top:12px">
+            <div style="display:flex;justify-content:space-between;align-items:center;font-size:12px;font-family:var(--mono);color:var(--text2);margin-bottom:6px">
+              <span id="update-progress-label">Downloading…</span>
+              <span id="update-progress-size"></span>
+            </div>
+            <div style="height:6px;background:var(--bg);border-radius:99px;overflow:hidden;border:1px solid var(--border)">
+              <div id="update-progress-bar" style="height:100%;background:var(--accent);border-radius:99px;transition:width 0.2s;width:0%"></div>
+            </div>
           </div>
           <div class="update-log" id="update-log">Ready to update. Nightly builds have the latest fixes and site support.
 Click "Check &amp; Update" to begin.</div>
@@ -1053,6 +2491,13 @@ Click "Check &amp; Update" to begin.</div>
           <div class="page-subtitle">Configure RAVdownloader to your preferences.</div>
         </div>
         <div class="card">
+          <div class="settings-row">
+            <div class="sr-left">
+              <div class="sr-label">Your Name</div>
+              <div class="sr-desc">Attached to logs and bug reports so Colin knows who they're from. You'll be asked when submitting a report if it's not set.</div>
+            </div>
+            <input type="text" id="settings-user-name" class="adv-input" style="width:220px" placeholder="(optional)" autocomplete="off" spellcheck="false" onblur="saveUserName()" onkeydown="if(event.key==='Enter') this.blur()"/>
+          </div>
           <div class="settings-row">
             <div class="sr-left">
               <div class="sr-label">Download Folder</div>
@@ -1108,7 +2553,7 @@ Click "Check &amp; Update" to begin.</div>
               <div class="sr-label">About</div>
               <div class="sr-desc">RAVdownloader by Colin Christy</div>
             </div>
-            <span style="font-size:12px;color:var(--text3);font-family:var(--mono)" id="settings-app-version">v2.1.0 (3-15-26)</span>
+            <span style="font-size:12px;color:var(--text3);font-family:var(--mono)" id="settings-app-version">v3.0.2 (6-8-26)</span>
           </div>
           <div class="settings-row">
             <div class="sr-left">
@@ -1174,9 +2619,9 @@ Click "Check &amp; Update" to begin.</div>
 <!-- ── WELCOME MODAL ── -->
 <div class="welcome-overlay" id="welcome-modal">
   <div class="welcome-modal" style="max-height:85vh;overflow-y:auto">
-    <div class="welcome-logo">R</div>
+    <div class="welcome-logo"><img src="../../assets/logo.png" alt="RAV"/></div>
     <div class="welcome-title">Welcome to RAV<span>downloader</span></div>
-    <div class="welcome-subtitle">Thanks for using RAVdownloader! Quick setup to get you started.</div>
+    <div class="welcome-subtitle">Version 3.0 — fresh look, same powerful tools. Quick setup to get you started.</div>
 
     <!-- Step 1 -->
     <div class="welcome-step">
@@ -1196,7 +2641,7 @@ Click "Check &amp; Update" to begin.</div>
       <div class="welcome-step-header">
         <div class="welcome-step-num">2</div>
         <div class="welcome-step-title">Update yt-dlp</div>
-        <span style="font-size:10px;font-weight:700;color:var(--accent);background:var(--accent-dim);padding:2px 8px;border-radius:4px;margin-left:auto">RECOMMENDED</span>
+        <span style="font-size:10px;font-weight:800;letter-spacing:0.06em;color:#fff;background:linear-gradient(135deg,#d8201f,#a50000);padding:2px 8px;border-radius:4px;margin-left:auto">RECOMMENDED</span>
       </div>
       <div class="welcome-step-desc">Get the latest version for best compatibility and bug fixes.</div>
       <div class="welcome-step-content">
@@ -1230,17 +2675,25 @@ Click "Check &amp; Update" to begin.</div>
     <!-- Changelog -->
     <div class="welcome-step" id="welcome-changelog">
       <div class="welcome-step-header">
-        <div class="welcome-step-num" style="background:var(--blue);color:#fff">&#9733;</div>
-        <div class="welcome-step-title">What's New</div>
+        <div class="welcome-step-num" style="background:linear-gradient(135deg,#2a1e85,#1d145a);color:#fff;box-shadow:0 0 12px rgba(29,20,90,0.5)">&#9733;</div>
+        <div class="welcome-step-title">What's New in 3.0</div>
       </div>
       <div class="welcome-step-desc" style="line-height:1.6" id="changelog-content">
-        <strong>New in v2.4.0</strong><br/>
-        &bull; Lower Third Generator — create broadcast-ready lower thirds with custom text, live preview, and ProRes 4444 export with alpha<br/>
-        &bull; Adjustable font size and position controls with TriCaster-matched defaults<br/>
+        <strong>v3.0.2 — Logging, Reporting &amp; Convert (6-8-26)</strong><br/>
+        &bull; Your name is now attached to every log and bug report<br/>
+        &bull; Failed/hung downloads now prompt to report the issue to Colin<br/>
+        &bull; yt-dlp update shows a clean progress bar instead of a text spam<br/>
+        &bull; Converter: added JPG as a target format<br/>
         <br/>
-        <strong>New in v2.3.1</strong><br/>
-        &bull; Audio Extractor — pull MP3 from any video file<br/>
-        &bull; Hard limiter, trim, and custom filename for extractions
+        <strong>v3.0.0 — Major UI Refresh</strong><br/>
+        &bull; Brand-new look matching the RAV identity — navy + red color scheme<br/>
+        &bull; Updated app icon and logo throughout<br/>
+        &bull; Cleaner button placement and smoother layout — anyone can use it<br/>
+        &bull; All your favorite tools are right where they should be<br/>
+        <br/>
+        <strong>All v2.x features preserved</strong><br/>
+        &bull; Downloader · Convert · Audio Extractor · Lower Third · Merge<br/>
+        &bull; Advanced post-processing (trim, blur, source bug, limiter, custom filename)
       </div>
     </div>
 
@@ -1265,7 +2718,7 @@ Click "Check &amp; Update" to begin.</div>
     <div class="up-version" id="update-popup-version"></div>
     <div class="up-btns">
       <button style="background:var(--bg3);color:var(--text2);border:1px solid var(--border)" onclick="skipUpdate()">Skip</button>
-      <button style="background:var(--accent);color:#000" onclick="acceptUpdate()">Update (Recommended)</button>
+      <button style="background:linear-gradient(180deg,#d8201f,#a50000);color:#fff" onclick="acceptUpdate()">Update (Recommended)</button>
     </div>
   </div>
 </div>
@@ -1285,7 +2738,35 @@ Click "Check &amp; Update" to begin.</div>
     </div>
     <div class="up-btns" id="app-update-btns">
       <button style="flex:1;padding:12px;border-radius:var(--radius-sm);border:none;font-family:var(--font);font-size:14px;font-weight:700;cursor:pointer;background:var(--bg3);color:var(--text2);border:1px solid var(--border)" onclick="dismissAppUpdate()">Skip</button>
-      <button style="flex:1;padding:12px;border-radius:var(--radius-sm);border:none;font-family:var(--font);font-size:14px;font-weight:700;cursor:pointer;background:var(--accent);color:#000" id="app-update-download-btn" onclick="startAppUpdate()">Update (Recommended)</button>
+      <button style="flex:1;padding:12px;border-radius:var(--radius-sm);border:none;font-family:var(--font);font-size:14px;font-weight:700;cursor:pointer;background:linear-gradient(180deg,#d8201f,#a50000);color:#fff" id="app-update-download-btn" onclick="showAppUpdateConfirm()">Update (Recommended)</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── APP UPDATE CONFIRMATION POPUP ── -->
+<div class="app-update-overlay" id="app-update-confirm-popup">
+  <div class="app-update-popup" style="max-width:520px;text-align:left">
+    <div style="font-size:32px;margin-bottom:14px;text-align:center">&#9888;&#65039;</div>
+    <div style="font-size:18px;font-weight:800;margin-bottom:14px;text-align:center">Before You Update — Please Read</div>
+    <div style="font-size:13px;color:var(--text2);line-height:1.6;margin-bottom:14px">
+      Once you continue, RAVdownloader will:
+    </div>
+    <ol style="font-size:13px;color:var(--text2);line-height:1.7;margin:0 0 14px 18px;padding:0">
+      <li><strong style="color:var(--text)">Close this application</strong></li>
+      <li><strong style="color:var(--text)">Uninstall</strong> the current version</li>
+      <li><strong style="color:var(--text)">Reinstall</strong> the new version automatically</li>
+    </ol>
+    <div style="font-size:13px;color:var(--text2);line-height:1.6;margin-bottom:10px">
+      Please wait <strong style="color:var(--accent2)">approximately 1 minute</strong>, then search for
+      <strong style="color:var(--text)">"RAVdownloader"</strong> in the Windows search bar to launch the new version.
+    </div>
+    <div style="font-size:12px;color:var(--text3);line-height:1.6;margin-bottom:20px;padding:10px 12px;background:rgba(230,59,59,0.06);border:1px solid rgba(230,59,59,0.18);border-radius:6px">
+      <strong style="color:var(--accent2)">Heads up:</strong> All existing shortcuts will be removed during the update.
+      You may want to <strong style="color:var(--text)">re-pin RAVdownloader to your taskbar</strong> after it reinstalls.
+    </div>
+    <div class="up-btns">
+      <button style="flex:1;padding:12px;border-radius:var(--radius-sm);border:none;font-family:var(--font);font-size:14px;font-weight:700;cursor:pointer;background:var(--bg3);color:var(--text2);border:1px solid var(--border)" onclick="cancelAppUpdateConfirm()">Cancel</button>
+      <button style="flex:1;padding:12px;border-radius:var(--radius-sm);border:none;font-family:var(--font);font-size:14px;font-weight:700;cursor:pointer;background:linear-gradient(180deg,#d8201f,#a50000);color:#fff" onclick="startAppUpdate()">Continue Update</button>
     </div>
   </div>
 </div>
@@ -1296,6 +2777,10 @@ Click "Check &amp; Update" to begin.</div>
     <div class="modal-header">
       <div class="modal-title">Report an Issue</div>
       <button class="modal-close" onclick="closeModal('report-modal')">&#10005;</button>
+    </div>
+    <div style="margin-bottom:16px">
+      <label style="font-size:12px;font-weight:600;color:var(--text2);display:block;margin-bottom:6px">Your name <span style="color:var(--red);font-weight:700">*</span></label>
+      <input type="text" id="report-name" class="adv-input" style="width:100%" placeholder="Required" autocomplete="off" spellcheck="false"/>
     </div>
     <div style="margin-bottom:16px">
       <label style="font-size:12px;font-weight:600;color:var(--text2);display:block;margin-bottom:6px">Link that failed (optional)</label>
@@ -1314,6 +2799,24 @@ Click "Check &amp; Update" to begin.</div>
   </div>
 </div>
 
+<!-- ── DOWNLOAD FAILED — REPORT PROMPT ── -->
+<div class="modal-overlay" id="fail-report-modal">
+  <div class="modal" style="width:420px">
+    <div class="modal-header">
+      <div class="modal-title">Sorry, that didn't work</div>
+      <button class="modal-close" onclick="closeModal('fail-report-modal')">&#10005;</button>
+    </div>
+    <div style="font-size:13px;color:var(--text2);margin-bottom:8px;line-height:1.5">
+      The download failed or got hung up. Would you like to report this issue to Colin?
+    </div>
+    <div id="fail-report-url" style="font-size:11px;color:var(--text3);font-family:var(--mono);word-break:break-all;margin-bottom:16px;padding:8px;background:var(--bg);border-radius:6px;border:1px solid var(--border);display:none"></div>
+    <div style="display:flex;gap:10px">
+      <button class="btn btn-ghost" style="flex:1" onclick="closeModal('fail-report-modal')">No thanks</button>
+      <button class="btn btn-primary" style="flex:1" onclick="confirmFailReport()">Yes, report it</button>
+    </div>
+  </div>
+</div>
+
 <!-- ── TOAST ── -->
 <div id="toast"></div>
 
@@ -1329,6 +2832,17 @@ let allSites = [];
 let convertFiles = [];
 let selectedConvertFormat = 'png';
 let settings = {};
+
+// ──────────────────────────────────────────────────────────────
+// Format segmented control — keeps hidden #type-select in sync
+// so all existing JS that reads type-select.value still works.
+// ──────────────────────────────────────────────────────────────
+function selectFormat(btn) {
+  document.querySelectorAll('.seg-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  const sel = document.getElementById('type-select');
+  if (sel) sel.value = btn.dataset.fmt;
+}
 
 // ──────────────────────────────────────────────────────────────
 // Init
@@ -1399,10 +2913,25 @@ async function init() {
     checkForAppUpdate();
   }
 
-  // Listen for yt-dlp download progress (for welcome screen bar)
-  api.onYtdlpDownloadProgress(({ pct }) => {
-    const bar = document.getElementById('welcome-update-bar');
+  // Populate name input in Settings (optional here; required at report time)
+  const nameInput = document.getElementById('settings-user-name');
+  if (nameInput) nameInput.value = settings.userName || '';
+
+  // Listen for yt-dlp download progress (welcome screen bar + update view bar)
+  api.onYtdlpDownloadProgress(({ pct, downloaded, totalBytes }) => {
+    const welcomeBar = document.getElementById('welcome-update-bar');
+    if (welcomeBar) welcomeBar.style.width = pct + '%';
+
+    const bar = document.getElementById('update-progress-bar');
     if (bar) bar.style.width = pct + '%';
+    const label = document.getElementById('update-progress-label');
+    if (label) label.textContent = `Downloading… ${pct}%`;
+    const size = document.getElementById('update-progress-size');
+    if (size) {
+      const mb = (downloaded / 1048576).toFixed(1);
+      const totalMb = totalBytes > 0 ? (totalBytes / 1048576).toFixed(1) : null;
+      size.textContent = totalMb ? `${mb} / ${totalMb} MB` : `${mb} MB`;
+    }
   });
 
   // Listen for app update download progress
@@ -1591,6 +3120,7 @@ async function downloadItem(id) {
   } else {
     updateItemStatus(id, 'error');
     showToast('Download failed — check logs', 'error');
+    promptFailReport(item.url, result.error || 'Download failed or hung up');
   }
   currentDownloadId = null;
 }
@@ -1880,6 +3410,16 @@ async function doUpdate() {
   btn.disabled = true;
   btn.textContent = 'Updating…';
   document.getElementById('update-log').textContent = 'Starting update…';
+
+  const progressArea = document.getElementById('update-progress-area');
+  const progressBar = document.getElementById('update-progress-bar');
+  const progressLabel = document.getElementById('update-progress-label');
+  const progressSize = document.getElementById('update-progress-size');
+  if (progressArea) progressArea.style.display = 'block';
+  if (progressBar) progressBar.style.width = '0%';
+  if (progressLabel) progressLabel.textContent = 'Downloading…';
+  if (progressSize) progressSize.textContent = '';
+
   const useNightly = document.getElementById('nightly-toggle')?.checked !== false;
   const result = await api.updateYtdlp(useNightly);
   if (result.success) {
@@ -1891,6 +3431,7 @@ async function doUpdate() {
     document.getElementById('update-log').textContent += '\n❌ Update failed: ' + result.error;
     showToast('Update failed — check logs', 'error');
   }
+  if (progressArea) progressArea.style.display = 'none';
   btn.disabled = false;
   btn.textContent = 'Check & Update';
 }
@@ -1927,12 +3468,16 @@ function updatePathDisplay(p) {
 function selectConvertFormat(fmt) {
   selectedConvertFormat = fmt;
   document.getElementById('fmt-png').classList.toggle('selected', fmt === 'png');
+  document.getElementById('fmt-jpg').classList.toggle('selected', fmt === 'jpg');
   document.getElementById('fmt-mp4').classList.toggle('selected', fmt === 'mp4');
 }
 
+const CONVERT_IMAGE_EXTS = ['avif','heic','jpg','jpeg','png','webp','tiff','bmp','pdf'];
+const CONVERT_VIDEO_EXTS = ['mov','mkv','avi','webm','mp4','m4v','flv','wmv'];
+
 async function pickConvertFiles() {
-  const imageFilters = [{ name: 'Images & PDFs', extensions: ['avif','heic','jpg','jpeg','png','webp','tiff','bmp','pdf'] }];
-  const videoFilters = [{ name: 'Videos', extensions: ['mov','mkv','avi','webm','mp4','m4v','flv','wmv'] }];
+  const imageFilters = [{ name: 'Images & PDFs', extensions: CONVERT_IMAGE_EXTS }];
+  const videoFilters = [{ name: 'Videos', extensions: CONVERT_VIDEO_EXTS }];
   const filters = selectedConvertFormat === 'png' ? imageFilters : videoFilters;
   const files = await api.chooseFiles({ title: 'Select Files to Convert', filters });
   if (files.length) {
@@ -1940,6 +3485,56 @@ async function pickConvertFiles() {
     renderConvertFiles();
     document.getElementById('convert-start-btn').style.display = '';
   }
+}
+
+function addConvertFilesFromPaths(paths) {
+  const allowed = selectedConvertFormat === 'png' ? CONVERT_IMAGE_EXTS : CONVERT_VIDEO_EXTS;
+  const filtered = paths.filter(p =>
+    p && allowed.some(ext => p.toLowerCase().endsWith('.' + ext))
+  );
+  if (!filtered.length) {
+    const label = selectedConvertFormat === 'png' ? 'image or PDF' : 'video';
+    showToast('Drop ' + label + ' files only', 'error');
+    return;
+  }
+  const incoming = filtered.map(p => ({ path: p, status: 'pending' }));
+  convertFiles = convertFiles.length ? convertFiles.concat(incoming) : incoming;
+  renderConvertFiles();
+  document.getElementById('convert-start-btn').style.display = '';
+}
+
+function initConvertFileDrop() {
+  const parentView = document.getElementById('view-convert');
+  const zone = document.getElementById('convert-drop-zone');
+  if (!parentView || !zone) return;
+
+  parentView.addEventListener('dragenter', e => {
+    if (!hasFiles(e.dataTransfer)) return;
+    e.preventDefault();
+    zone.classList.add('drag-over');
+  });
+  parentView.addEventListener('dragover', e => {
+    if (!hasFiles(e.dataTransfer)) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'copy';
+    zone.classList.add('drag-over');
+  });
+  parentView.addEventListener('dragleave', e => {
+    if (e.target === parentView) zone.classList.remove('drag-over');
+  });
+  parentView.addEventListener('drop', e => {
+    if (!hasFiles(e.dataTransfer)) return;
+    e.preventDefault();
+    e.stopPropagation();
+    zone.classList.remove('drag-over');
+    const files = Array.from(e.dataTransfer.files || []);
+    const paths = files.map(f => f.path).filter(Boolean);
+    if (!paths.length) {
+      showToast('Could not read dropped files. Try clicking to pick instead.', 'error');
+      return;
+    }
+    addConvertFilesFromPaths(paths);
+  });
 }
 
 function renderConvertFiles() {
@@ -1959,7 +3554,9 @@ async function startConversion() {
     if (statusEl) { statusEl.textContent = 'Converting…'; statusEl.className = 'cfi-status converting'; }
     const outputDir = dl || f.path.substring(0, f.path.lastIndexOf('\\') || f.path.lastIndexOf('/'));
     const isPdf = f.path.toLowerCase().endsWith('.pdf');
-    const fmt = (selectedConvertFormat === 'png' && isPdf) ? 'pdf-png' : selectedConvertFormat;
+    let fmt = selectedConvertFormat;
+    if (isPdf && fmt === 'png') fmt = 'pdf-png';
+    else if (isPdf && fmt === 'jpg') fmt = 'pdf-jpg';
     const result = await api.convertFile({ inputPath: f.path, outputFormat: fmt, outputDir });
     f.status = result.success ? 'done' : 'error';
     if (statusEl) {
@@ -1973,19 +3570,58 @@ async function startConversion() {
 
 // ── Extractor ────────────────────────────────────────────────
 let extractorFilePath = null;
+const EXTRACTOR_VIDEO_EXTS = ['mp4','m4v','mov','mkv','avi','webm','flv','wmv','ts'];
 
 async function pickExtractorFile() {
   const files = await api.chooseFiles({
     title: 'Select Video File',
-    filters: [{ name: 'Video Files', extensions: ['mp4','m4v','mov','mkv','avi','webm','flv','wmv','ts'] }]
+    filters: [{ name: 'Video Files', extensions: EXTRACTOR_VIDEO_EXTS }]
   });
   if (files.length) {
-    extractorFilePath = files[0];
-    const name = extractorFilePath.split(/[/\\]/).pop();
-    document.getElementById('ext-file-label').textContent = name;
-    document.getElementById('ext-drop-zone').style.borderColor = 'var(--accent)';
-    document.getElementById('ext-options-card').style.display = '';
+    setExtractorFile(files[0]);
   }
+}
+
+function setExtractorFile(path) {
+  extractorFilePath = path;
+  const name = path.split(/[/\\]/).pop();
+  document.getElementById('ext-file-label').textContent = name;
+  document.getElementById('ext-drop-zone').style.borderColor = 'var(--accent)';
+  document.getElementById('ext-options-card').style.display = '';
+}
+
+function initExtractorFileDrop() {
+  const parentView = document.getElementById('view-extractor');
+  const zone = document.getElementById('ext-drop-zone');
+  if (!parentView || !zone) return;
+
+  parentView.addEventListener('dragenter', e => {
+    if (!hasFiles(e.dataTransfer)) return;
+    e.preventDefault();
+    zone.classList.add('drag-over');
+  });
+  parentView.addEventListener('dragover', e => {
+    if (!hasFiles(e.dataTransfer)) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'copy';
+    zone.classList.add('drag-over');
+  });
+  parentView.addEventListener('dragleave', e => {
+    if (e.target === parentView) zone.classList.remove('drag-over');
+  });
+  parentView.addEventListener('drop', e => {
+    if (!hasFiles(e.dataTransfer)) return;
+    e.preventDefault();
+    e.stopPropagation();
+    zone.classList.remove('drag-over');
+    const files = Array.from(e.dataTransfer.files || []);
+    const first = files.find(f => f.path && EXTRACTOR_VIDEO_EXTS.some(ext => f.path.toLowerCase().endsWith('.' + ext)));
+    if (!first) {
+      showToast('Drop a video file (MP4, MOV, MKV, AVI, WEBM)', 'error');
+      return;
+    }
+    setExtractorFile(first.path);
+  });
 }
 
 async function startExtraction() {
@@ -2244,6 +3880,231 @@ async function startLtExport() {
 }
 
 // ──────────────────────────────────────────────────────────────
+// Merge Videos
+// ──────────────────────────────────────────────────────────────
+let mergeFiles = [];      // { path, name, duration }
+let mergeDragIndex = -1;
+
+async function pickMergeFiles() {
+  const files = await api.chooseFiles({
+    title: 'Select Video Files to Merge',
+    filters: [{ name: 'Video Files', extensions: ['mp4','m4v','mov','mkv','avi','webm'] }]
+  });
+  if (files.length) {
+    mergeFiles = files.map(f => ({ path: f, name: f.split(/[/\\]/).pop(), duration: 0 }));
+    await probeMergeDurations();
+    renderMergeFiles();
+    showMergeUI();
+  }
+}
+
+async function pickMergeFilesAdd() {
+  const files = await api.chooseFiles({
+    title: 'Add More Video Files',
+    filters: [{ name: 'Video Files', extensions: ['mp4','m4v','mov','mkv','avi','webm'] }]
+  });
+  if (files.length) {
+    mergeFiles.push(...files.map(f => ({ path: f, name: f.split(/[/\\]/).pop(), duration: 0 })));
+    await probeMergeDurations();
+    renderMergeFiles();
+    showMergeUI();
+  }
+}
+
+function clearMergeFiles() {
+  mergeFiles = [];
+  renderMergeFiles();
+  hideMergeUI();
+}
+
+async function probeMergeDurations() {
+  const results = await api.probeMergeDurations(mergeFiles.map(f => f.path));
+  if (results) {
+    if (results.durations) {
+      results.durations.forEach((dur, i) => {
+        if (i < mergeFiles.length) mergeFiles[i].duration = dur || 0;
+      });
+    }
+    if (results.resolutions) {
+      results.resolutions.forEach((res, i) => {
+        if (i < mergeFiles.length) mergeFiles[i].resolution = res || null;
+      });
+    }
+  }
+  updateMergeTotalDuration();
+  checkMergeResolutions();
+}
+
+function checkMergeResolutions() {
+  const warning = document.getElementById('merge-res-warning');
+  const resolutions = mergeFiles.filter(f => f.resolution).map(f => `${f.resolution.w}x${f.resolution.h}`);
+  const unique = [...new Set(resolutions)];
+  if (unique.length > 1) {
+    warning.style.display = '';
+  } else {
+    warning.style.display = 'none';
+  }
+}
+
+function mergeResToggle(which) {
+  // Only one resolution toggle can be active at a time
+  const el720 = document.getElementById('merge-720p-toggle');
+  const el1080 = document.getElementById('merge-1080p-toggle');
+  if (which === '720p' && el720.checked) el1080.checked = false;
+  if (which === '1080p' && el1080.checked) el720.checked = false;
+}
+
+function showMergeUI() {
+  document.getElementById('merge-empty-state').style.display = 'none';
+  document.getElementById('merge-list-actions').style.display = '';
+  document.getElementById('merge-total-badge').style.display = '';
+  document.getElementById('merge-options-card').style.display = '';
+}
+
+function hideMergeUI() {
+  document.getElementById('merge-empty-state').style.display = '';
+  document.getElementById('merge-list-actions').style.display = 'none';
+  document.getElementById('merge-total-badge').style.display = 'none';
+  document.getElementById('merge-options-card').style.display = 'none';
+  document.getElementById('merge-file-list').innerHTML = '';
+}
+
+function formatDuration(secs) {
+  if (!secs || secs <= 0) return '0:00';
+  const h = Math.floor(secs / 3600);
+  const m = Math.floor((secs % 3600) / 60);
+  const s = Math.floor(secs % 60);
+  if (h > 0) return `${h}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+  return `${m}:${String(s).padStart(2,'0')}`;
+}
+
+function updateMergeTotalDuration() {
+  const total = mergeFiles.reduce((sum, f) => sum + (f.duration || 0), 0);
+  document.getElementById('merge-total-duration').textContent = formatDuration(total);
+}
+
+function renderMergeFiles() {
+  const el = document.getElementById('merge-file-list');
+  if (!mergeFiles.length) { el.innerHTML = ''; return; }
+  el.innerHTML = mergeFiles.map((f, i) => {
+    return `<div class="merge-file-item" draggable="true" data-idx="${i}"
+      ondragstart="mergeDragStart(event,${i})" ondragover="mergeDragOver(event,${i})"
+      ondragenter="mergeDragEnter(event,${i})" ondragleave="mergeDragLeave(event)"
+      ondrop="mergeDrop(event,${i})" ondragend="mergeDragEnd(event)">
+      <span class="merge-file-grip">&#9776;</span>
+      <span class="merge-file-index">${i + 1}</span>
+      <span class="merge-file-name" title="${f.path}">${f.name}</span>
+      <span class="merge-file-dur">${formatDuration(f.duration)}</span>
+      <button class="merge-file-remove" onclick="event.stopPropagation();removeMergeFile(${i})" title="Remove">&#10005;</button>
+    </div>`;
+  }).join('');
+}
+
+// ── Drag and drop reordering ──
+function mergeDragStart(e, idx) {
+  mergeDragIndex = idx;
+  e.dataTransfer.effectAllowed = 'move';
+  e.target.classList.add('dragging');
+}
+function mergeDragOver(e) {
+  e.preventDefault();
+  e.dataTransfer.dropEffect = 'move';
+}
+function mergeDragEnter(e, idx) {
+  e.preventDefault();
+  document.querySelectorAll('.merge-file-item').forEach(el => el.classList.remove('drag-over'));
+  if (idx !== mergeDragIndex) e.currentTarget.classList.add('drag-over');
+}
+function mergeDragLeave(e) {
+  e.currentTarget.classList.remove('drag-over');
+}
+function mergeDrop(e, targetIdx) {
+  e.preventDefault();
+  document.querySelectorAll('.merge-file-item').forEach(el => el.classList.remove('drag-over'));
+  if (mergeDragIndex === -1 || mergeDragIndex === targetIdx) return;
+  const [item] = mergeFiles.splice(mergeDragIndex, 1);
+  mergeFiles.splice(targetIdx, 0, item);
+  mergeDragIndex = -1;
+  renderMergeFiles();
+  updateMergeTotalDuration();
+}
+function mergeDragEnd(e) {
+  mergeDragIndex = -1;
+  document.querySelectorAll('.merge-file-item').forEach(el => {
+    el.classList.remove('dragging', 'drag-over');
+  });
+}
+
+function removeMergeFile(index) {
+  mergeFiles.splice(index, 1);
+  if (!mergeFiles.length) { clearMergeFiles(); return; }
+  renderMergeFiles();
+  updateMergeTotalDuration();
+}
+
+async function startMerge() {
+  if (mergeFiles.length < 2) { showToast('Add at least 2 video files to merge', 'error'); return; }
+
+  const btn = document.getElementById('merge-start-btn');
+  const progressWrap = document.getElementById('merge-progress-wrap');
+  const errorEl = document.getElementById('merge-export-error');
+
+  btn.disabled = true;
+  btn.textContent = 'Merging...';
+  progressWrap.style.display = '';
+  errorEl.style.display = 'none';
+  document.getElementById('merge-progress-fill').style.width = '0%';
+  document.getElementById('merge-progress-text').textContent = 'Starting...';
+
+  const force720 = document.getElementById('merge-720p-toggle').checked;
+  const force1080 = document.getElementById('merge-1080p-toggle').checked;
+
+  const opts = {
+    files: mergeFiles.map(f => f.path),
+    hardLimiter: document.getElementById('merge-limiter-toggle').checked,
+    crossDissolve: document.getElementById('merge-dissolve-toggle').checked,
+    dipToWhite: document.getElementById('merge-dipwhite-toggle').checked,
+    removeAudio: document.getElementById('merge-noaudio-toggle').checked,
+    forceResolution: force720 ? '720p' : force1080 ? '1080p' : null,
+    outputDir: settings.downloadPath || null,
+  };
+
+  if (document.getElementById('merge-filename-toggle').checked) {
+    const name = document.getElementById('merge-filename-input').value.trim();
+    if (name) opts.customFilename = name;
+  }
+
+  api.onMergeProgress(raw => {
+    try {
+      const d = JSON.parse(raw);
+      document.getElementById('merge-progress-fill').style.width = d.pct + '%';
+      document.getElementById('merge-progress-text').textContent = d.msg;
+    } catch {}
+  });
+
+  try {
+    const result = await api.mergeVideos(opts);
+    if (result.success) {
+      document.getElementById('merge-progress-fill').style.width = '100%';
+      document.getElementById('merge-progress-text').textContent = 'Done! Saved to ' + result.outputPath.split(/[/\\]/).pop();
+      showToast('Videos merged successfully', 'success');
+    } else if (result.error === 'Merge cancelled') {
+      progressWrap.style.display = 'none';
+    } else {
+      errorEl.style.display = '';
+      errorEl.textContent = 'Merge failed: ' + (result.error || 'Unknown error').slice(0, 200);
+      showToast('Merge failed', 'error');
+    }
+  } catch (e) {
+    errorEl.style.display = '';
+    errorEl.textContent = 'Error: ' + e.message;
+  }
+
+  btn.disabled = false;
+  btn.textContent = '\u25B6 Merge Videos';
+}
+
+// ──────────────────────────────────────────────────────────────
 // Helpers
 // ──────────────────────────────────────────────────────────────
 function capitalize(s) { return s.charAt(0).toUpperCase() + s.slice(1); }
@@ -2410,9 +4271,18 @@ function dismissAppUpdate() {
   document.getElementById('app-update-popup').classList.remove('open');
 }
 
+function showAppUpdateConfirm() {
+  document.getElementById('app-update-confirm-popup').classList.add('open');
+}
+
+function cancelAppUpdateConfirm() {
+  document.getElementById('app-update-confirm-popup').classList.remove('open');
+}
+
 async function startAppUpdate() {
+  cancelAppUpdateConfirm();
+
   const btn = document.getElementById('app-update-download-btn');
-  const btnsArea = document.getElementById('app-update-btns');
   const progressArea = document.getElementById('app-update-progress-area');
 
   btn.textContent = 'Downloading…';
@@ -2510,28 +4380,79 @@ async function updateAuthStatus() {
   }
 }
 
+// ── User Name (optional in Settings, required at report time) ─
+async function saveUserName() {
+  const input = document.getElementById('settings-user-name');
+  const name = (input?.value || '').trim();
+  settings.userName = name;
+  await api.setSettings({ userName: name });
+  if (name) showToast('Name saved ✓', 'success');
+}
+
+// ── Download Failure Report Prompt ───────────────────────────
+let pendingFailUrl = '';
+let pendingFailError = '';
+
+function promptFailReport(failedUrl, errorDetails) {
+  pendingFailUrl = failedUrl || '';
+  pendingFailError = errorDetails || '';
+  const urlEl = document.getElementById('fail-report-url');
+  if (urlEl) {
+    if (failedUrl) { urlEl.style.display = 'block'; urlEl.textContent = failedUrl; }
+    else { urlEl.style.display = 'none'; urlEl.textContent = ''; }
+  }
+  openModal('fail-report-modal');
+}
+
+function confirmFailReport() {
+  closeModal('fail-report-modal');
+  openReportIssue(pendingFailUrl, pendingFailError);
+}
+
 // ── Report Issue ─────────────────────────────────────────────
 function openReportIssue(failedUrl, errorDetails) {
+  document.getElementById('report-name').value = settings.userName || '';
   document.getElementById('report-url').value = failedUrl || '';
   document.getElementById('report-description').value = errorDetails ? 'Error: ' + errorDetails : '';
   document.getElementById('report-status').style.display = 'none';
   document.getElementById('report-submit-btn').disabled = false;
   document.getElementById('report-submit-btn').textContent = 'Send Report';
   openModal('report-modal');
+  setTimeout(() => {
+    const target = settings.userName
+      ? document.getElementById('report-description')
+      : document.getElementById('report-name');
+    target?.focus();
+  }, 60);
 }
 
 async function submitReport() {
   const btn = document.getElementById('report-submit-btn');
   const statusEl = document.getElementById('report-status');
+  const nameInput = document.getElementById('report-name');
+  const userName = nameInput.value.trim();
   const failedUrl = document.getElementById('report-url').value.trim();
   const description = document.getElementById('report-description').value.trim();
 
+  if (!userName) {
+    statusEl.style.display = 'block';
+    statusEl.style.color = 'var(--red)';
+    statusEl.textContent = 'Please enter your name';
+    nameInput.focus();
+    return;
+  }
   if (!description && !failedUrl) {
     statusEl.style.display = 'block';
     statusEl.style.color = 'var(--red)';
     statusEl.textContent = 'Please enter a URL or describe the problem';
     return;
   }
+
+  // Persist name so future reports auto-fill and logs get tagged
+  settings.userName = userName;
+  await api.setSettings({ userName });
+  const settingsInput = document.getElementById('settings-user-name');
+  if (settingsInput) settingsInput.value = userName;
 
   btn.disabled = true;
   btn.textContent = 'Sending...';
@@ -2569,7 +4490,7 @@ async function runDiagnostics() {
   try {
     const d = await api.getDiagnostics();
     const lines = [
-      '=== RAVdownloader v2.0 Diagnostics ===',
+      '=== RAVdownloader v3.0 Diagnostics ===',
       '',
       'MODE: ' + (d.isDev ? 'Development (npm start)' : 'Packaged'),
       'CWD:  ' + d.cwd,
@@ -2605,6 +4526,688 @@ async function runDiagnostics() {
   } catch(e) {
     out.textContent = 'Diagnostics error: ' + e.message;
   }
+}
+
+// ── Podcast ─────────────────────────────────────────────────
+let podcastFiles = [];
+let podcastDragIndex = -1;
+let podcastFilenameManuallyEdited = false;
+const PODCAST_VIDEO_EXTS = ['mp4','m4v','mov','mkv','avi','webm'];
+
+function hasFiles(dt) {
+  if (!dt) return false;
+  if (dt.types && dt.types.length) {
+    for (let i = 0; i < dt.types.length; i++) {
+      if (dt.types[i] === 'Files') return true;
+    }
+  }
+  return false;
+}
+
+// Sort a batch of incoming files alphabetically by filename (natural order, so foo-2 < foo-10).
+// For a 1-item batch this is a no-op, so one-by-one additions preserve upload order.
+function sortPodcastBatch(items) {
+  return items.slice().sort((a, b) =>
+    a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' })
+  );
+}
+
+async function pickPodcastFiles() {
+  const files = await api.chooseFiles({
+    title: 'Select Podcast Clips',
+    filters: [{ name: 'Video Files', extensions: PODCAST_VIDEO_EXTS }]
+  });
+  if (files.length) {
+    const batch = files.map(f => ({ path: f, name: f.split(/[/\\]/).pop(), duration: 0 }));
+    podcastFiles = sortPodcastBatch(batch);
+    await probePodcastDurations();
+    renderPodcastFiles();
+    showPodcastUI();
+    syncPodcastFilenameFromBlockA();
+  }
+}
+
+async function pickPodcastFilesAdd() {
+  const files = await api.chooseFiles({
+    title: 'Add More Clips',
+    filters: [{ name: 'Video Files', extensions: PODCAST_VIDEO_EXTS }]
+  });
+  if (files.length) {
+    const batch = sortPodcastBatch(files.map(f => ({ path: f, name: f.split(/[/\\]/).pop(), duration: 0 })));
+    podcastFiles.push(...batch);
+    await probePodcastDurations();
+    renderPodcastFiles();
+    showPodcastUI();
+    syncPodcastFilenameFromBlockA();
+  }
+}
+
+function clearPodcastFiles() {
+  podcastFiles = [];
+  podcastFilenameManuallyEdited = false;
+  renderPodcastFiles();
+  hidePodcastUI();
+  const input = document.getElementById('podcast-filename-input');
+  if (input) input.value = '';
+}
+
+async function probePodcastDurations() {
+  const results = await api.probeMergeDurations(podcastFiles.map(f => f.path));
+  if (results && results.durations) {
+    results.durations.forEach((dur, i) => {
+      if (i < podcastFiles.length) podcastFiles[i].duration = dur || 0;
+    });
+  }
+  updatePodcastTotalDuration();
+}
+
+function showPodcastUI() {
+  document.getElementById('podcast-empty-state').style.display = 'none';
+  document.getElementById('podcast-list-actions').style.display = '';
+  document.getElementById('podcast-total-badge').style.display = '';
+  document.getElementById('podcast-options-card').style.display = '';
+}
+
+function hidePodcastUI() {
+  document.getElementById('podcast-empty-state').style.display = '';
+  document.getElementById('podcast-list-actions').style.display = 'none';
+  document.getElementById('podcast-total-badge').style.display = 'none';
+  document.getElementById('podcast-options-card').style.display = 'none';
+  document.getElementById('podcast-file-list').innerHTML = '';
+}
+
+function updatePodcastTotalDuration() {
+  const total = podcastFiles.reduce((sum, f) => sum + (f.duration || 0), 0);
+  document.getElementById('podcast-total-duration').textContent = formatDuration(total);
+}
+
+function formatPodcastEta(secs) {
+  secs = Math.max(0, Math.round(secs));
+  if (secs < 60) return secs + 's';
+  const m = Math.floor(secs / 60);
+  const s = secs % 60;
+  if (m < 60) return m + ':' + String(s).padStart(2, '0');
+  const h = Math.floor(m / 60);
+  const mm = m % 60;
+  return h + ':' + String(mm).padStart(2, '0') + ':' + String(s).padStart(2, '0');
+}
+
+function letterLabelForIndex(n) {
+  let s = '';
+  n = n + 1;
+  while (n > 0) {
+    n -= 1;
+    s = String.fromCharCode(65 + (n % 26)) + s;
+    n = Math.floor(n / 26);
+  }
+  return s;
+}
+
+function renderPodcastFiles() {
+  const el = document.getElementById('podcast-file-list');
+  if (!podcastFiles.length) { el.innerHTML = ''; return; }
+  el.innerHTML = podcastFiles.map((f, i) => {
+    const blockLetter = letterLabelForIndex(i);
+    const safePath = (f.path || '').replace(/"/g, '&quot;');
+    return '<div class="merge-file-item" draggable="true" data-idx="' + i + '"' +
+      ' ondragstart="podcastDragStart(event,' + i + ')" ondragover="podcastDragOver(event,' + i + ')"' +
+      ' ondragenter="podcastDragEnter(event,' + i + ')" ondragleave="podcastDragLeave(event)"' +
+      ' ondrop="podcastDrop(event,' + i + ')" ondragend="podcastDragEnd(event)">' +
+      '<span class="merge-file-grip">&#9776;</span>' +
+      '<span class="merge-file-index" style="color:var(--accent2)">' + blockLetter + '</span>' +
+      '<span class="merge-file-name" title="' + safePath + '">' + f.name + '</span>' +
+      '<span class="merge-file-dur">' + formatDuration(f.duration) + '</span>' +
+      '<button class="merge-file-remove" onclick="event.stopPropagation();removePodcastFile(' + i + ')" title="Remove">&#10005;</button>' +
+      '</div>';
+  }).join('');
+}
+
+function podcastDragStart(e, idx) {
+  podcastDragIndex = idx;
+  try { e.dataTransfer.effectAllowed = 'move'; } catch {}
+  try { e.dataTransfer.setData('text/plain', String(idx)); } catch {}
+  e.currentTarget.classList.add('dragging');
+}
+function podcastDragOver(e, idx) {
+  // Let native file drops bubble up to the view-level handler
+  if (hasFiles(e.dataTransfer)) return;
+  e.preventDefault();
+  e.dataTransfer.dropEffect = 'move';
+}
+function podcastDragEnter(e, idx) {
+  if (hasFiles(e.dataTransfer)) return;
+  e.preventDefault();
+  document.querySelectorAll('#podcast-file-list .merge-file-item').forEach(el => el.classList.remove('drag-over'));
+  if (idx !== podcastDragIndex) e.currentTarget.classList.add('drag-over');
+}
+function podcastDragLeave(e) {
+  e.currentTarget.classList.remove('drag-over');
+}
+function podcastDrop(e, targetIdx) {
+  if (hasFiles(e.dataTransfer)) return;        // native file drops handled at view level
+  e.preventDefault();
+  e.stopPropagation();
+  document.querySelectorAll('#podcast-file-list .merge-file-item').forEach(el => el.classList.remove('drag-over'));
+  if (podcastDragIndex === -1 || podcastDragIndex === targetIdx) return;
+  const [item] = podcastFiles.splice(podcastDragIndex, 1);
+  podcastFiles.splice(targetIdx, 0, item);
+  podcastDragIndex = -1;
+  renderPodcastFiles();
+  updatePodcastTotalDuration();
+  syncPodcastFilenameFromBlockA();
+}
+function podcastDragEnd() {
+  podcastDragIndex = -1;
+  document.querySelectorAll('#podcast-file-list .merge-file-item').forEach(el => {
+    el.classList.remove('dragging', 'drag-over');
+  });
+}
+
+function removePodcastFile(index) {
+  podcastFiles.splice(index, 1);
+  if (!podcastFiles.length) { clearPodcastFiles(); return; }
+  renderPodcastFiles();
+  updatePodcastTotalDuration();
+  syncPodcastFilenameFromBlockA();
+}
+
+// Filename auto-fill from block A
+function syncPodcastFilenameFromBlockA(force) {
+  const toggle = document.getElementById('podcast-use-blockA-toggle');
+  const input  = document.getElementById('podcast-filename-input');
+  if (!toggle || !input) return;
+  if (!toggle.checked) return;
+  if (!force && podcastFilenameManuallyEdited) return;
+  const first = podcastFiles[0];
+  if (first && first.name) {
+    input.value = first.name.replace(/\.[^.]+$/, '');
+    podcastFilenameManuallyEdited = false;
+  } else if (force) {
+    input.value = '';
+  }
+}
+
+function onPodcastFilenameEdit() {
+  const toggle = document.getElementById('podcast-use-blockA-toggle');
+  if (toggle && toggle.checked) toggle.checked = false;
+  podcastFilenameManuallyEdited = true;
+}
+
+// Native file drag-and-drop
+async function addPodcastFilesFromPaths(paths) {
+  const filtered = paths.filter(p =>
+    p && PODCAST_VIDEO_EXTS.some(ext => p.toLowerCase().endsWith('.' + ext))
+  );
+  if (!filtered.length) {
+    showToast('Drop video files only (mp4, mov, mkv, etc.)', 'error');
+    return false;
+  }
+  const incoming = sortPodcastBatch(
+    filtered.map(p => ({ path: p, name: p.split(/[/\\]/).pop(), duration: 0 }))
+  );
+  podcastFiles = podcastFiles.length ? podcastFiles.concat(incoming) : incoming;
+  await probePodcastDurations();
+  renderPodcastFiles();
+  showPodcastUI();
+  syncPodcastFilenameFromBlockA();
+  return true;
+}
+
+function initPodcastFileDrop() {
+  // Stop the browser from doing anything default (opening the file as a URL) anywhere in the window.
+  window.addEventListener('dragover', e => { e.preventDefault(); }, false);
+  window.addEventListener('drop',     e => { e.preventDefault(); }, false);
+
+  const parentView = document.getElementById('view-podcast');
+  if (!parentView) return;
+
+  const setHover = on => {
+    const zone = document.getElementById('podcast-drop-zone');
+    if (zone) zone.classList.toggle('drag-over', on);
+    parentView.classList.toggle('podcast-dropping', on);
+  };
+
+  parentView.addEventListener('dragenter', e => {
+    if (!hasFiles(e.dataTransfer)) return;
+    e.preventDefault();
+    setHover(true);
+  });
+  parentView.addEventListener('dragover', e => {
+    if (!hasFiles(e.dataTransfer)) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'copy';
+    setHover(true);
+  });
+  parentView.addEventListener('dragleave', e => {
+    // Only clear hover when leaving the view itself, not when crossing internal children
+    if (e.target === parentView) setHover(false);
+  });
+  parentView.addEventListener('drop', async e => {
+    if (!hasFiles(e.dataTransfer)) return;
+    e.preventDefault();
+    e.stopPropagation();
+    setHover(false);
+    const files = Array.from(e.dataTransfer.files || []);
+    const paths = files.map(f => f.path).filter(Boolean);
+    if (!paths.length) {
+      showToast('Could not read dropped files. Try clicking to pick instead.', 'error');
+      return;
+    }
+    await addPodcastFilesFromPaths(paths);
+  });
+}
+
+async function startPodcast() {
+  if (podcastFiles.length < 2) { showToast('Add at least 2 clips to build a podcast', 'error'); return; }
+
+  const wantMp4 = document.getElementById('podcast-export-mp4-toggle').checked;
+  const wantMp3 = document.getElementById('podcast-export-mp3-toggle').checked;
+  if (!wantMp4 && !wantMp3) { showToast('Pick at least one output (MP4 or MP3)', 'error'); return; }
+
+  const btn = document.getElementById('podcast-start-btn');
+  const progressWrap = document.getElementById('podcast-progress-wrap');
+  const errorEl = document.getElementById('podcast-export-error');
+  const fill = document.getElementById('podcast-progress-fill');
+  const text = document.getElementById('podcast-progress-text');
+
+  btn.disabled = true;
+  btn.textContent = 'Building...';
+  progressWrap.style.display = 'block';
+  errorEl.style.display = 'none';
+  errorEl.textContent = '';
+  fill.style.width = '0%';
+  text.textContent = 'Starting...';
+
+  api.onPodcastProgress(raw => {
+    try {
+      const d = JSON.parse(raw);
+      fill.style.width = (d.pct || 0) + '%';
+      const bits = [];
+      if (d.status === 'done')       bits.push('Done!');
+      else if (d.status === 'error') bits.push(d.msg || 'Failed');
+      else {
+        bits.push((d.pct != null ? d.pct + '%' : '…'));
+        if (d.etaSec != null && d.etaSec > 0) bits.push(formatPodcastEta(d.etaSec) + ' left');
+        else if (d.etaSec === 0)              bits.push('almost done');
+        if (d.speed != null && d.speed > 0)   bits.push(d.speed.toFixed(1) + 'x');
+        if (d.msg && !d.pct) bits.unshift(d.msg);
+      }
+      text.textContent = bits.join('  •  ');
+    } catch {}
+  });
+
+  const opts = {
+    files: podcastFiles.map(f => f.path),
+    hardLimiter: document.getElementById('podcast-limiter-toggle').checked,
+    filename: document.getElementById('podcast-filename-input').value.trim(),
+    outputDir: (typeof settings !== 'undefined' && settings && settings.downloadPath) ? settings.downloadPath : null,
+    exportMp4: wantMp4,
+    exportMp3: wantMp3,
+  };
+
+  try {
+    const result = await api.mergePodcast(opts);
+    if (result.success) {
+      fill.style.width = '100%';
+      const parts = [];
+      const mp4Name = result.mp4Path ? result.mp4Path.split(/[/\\]/).pop() : null;
+      const mp3Name = result.mp3Path ? result.mp3Path.split(/[/\\]/).pop() : null;
+      if (mp4Name) parts.push(mp4Name);
+      if (mp3Name) parts.push(mp3Name);
+      text.textContent = 'Done! Saved ' + parts.join(' + ');
+      showToast('Podcast built — opening time codes window', 'success');
+      try {
+        const titleBase = (mp4Name || mp3Name || 'Podcast').replace(/\.(mp4|mp3)$/i, '');
+        await api.openTimecodesWindow({
+          breaks: result.breaks || [],
+          title: 'Time Codes — ' + titleBase,
+        });
+      } catch (e) {
+        showToast('Could not open time codes window: ' + e.message, 'error');
+      }
+    } else {
+      errorEl.style.display = '';
+      errorEl.textContent = 'Build failed: ' + (result.error || 'Unknown error').slice(0, 240);
+      showToast('Podcast build failed', 'error');
+    }
+  } catch (e) {
+    errorEl.style.display = '';
+    errorEl.textContent = 'Error: ' + e.message;
+  }
+
+  btn.disabled = false;
+  btn.textContent = '▶ Build Podcast';
+}
+
+// Wire up file drop and the export-format ext hint once DOM is parsed
+function initPodcastWiring() {
+  initPodcastFileDrop();
+  initConvertFileDrop();
+  initExtractorFileDrop();
+  const mp4Toggle = document.getElementById('podcast-export-mp4-toggle');
+  const mp3Toggle = document.getElementById('podcast-export-mp3-toggle');
+  const hint      = document.getElementById('podcast-ext-hint');
+  function updateHint() {
+    if (!hint) return;
+    const parts = [];
+    if (mp4Toggle && mp4Toggle.checked) parts.push('.mp4');
+    if (mp3Toggle && mp3Toggle.checked) parts.push('.mp3');
+    hint.textContent = parts.length ? parts.join(' + ') : '(no output)';
+  }
+  if (mp4Toggle) mp4Toggle.addEventListener('change', updateHint);
+  if (mp3Toggle) mp3Toggle.addEventListener('change', updateHint);
+  updateHint();
+}
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', initPodcastWiring);
+} else {
+  initPodcastWiring();
+}
+
+// ── Time Calc ───────────────────────────────────────────────
+let tcMode = 'manual';                 // 'manual' | 'files'
+let tcManualRows = [{ id: 1, value: '', sign: 1 }];
+let tcNextRowId = 2;
+let tcFiles = [];                      // { path, name, duration }
+const TC_MEDIA_EXTS = ['mp4','m4v','mov','mkv','avi','webm','mp3','wav','flac','aac','m4a','ogg','opus','wma'];
+
+function tcSwitchMode(btn) {
+  document.querySelectorAll('#view-timecalc .seg-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  tcMode = btn.dataset.tcMode;
+  document.getElementById('tc-manual-panel').style.display = tcMode === 'manual' ? '' : 'none';
+  document.getElementById('tc-files-panel').style.display  = tcMode === 'files'  ? '' : 'none';
+  tcRecalc();
+}
+
+// Parse "HH:MM:SS.mmm" / "MM:SS" / "90" / "1:30" into seconds (returns 0 on garbage)
+function tcParseTime(str) {
+  if (str == null) return 0;
+  str = String(str).trim();
+  if (!str) return 0;
+  // Allow a leading sign just in case the user types one
+  let signFromText = 1;
+  if (str[0] === '-') { signFromText = -1; str = str.slice(1); }
+  else if (str[0] === '+') { str = str.slice(1); }
+  const parts = str.split(':');
+  let h = 0, m = 0, s = 0;
+  if (parts.length === 3)      { h = parseFloat(parts[0]) || 0; m = parseFloat(parts[1]) || 0; s = parseFloat(parts[2]) || 0; }
+  else if (parts.length === 2) { m = parseFloat(parts[0]) || 0; s = parseFloat(parts[1]) || 0; }
+  else                         { s = parseFloat(parts[0]) || 0; }
+  return signFromText * (h * 3600 + m * 60 + s);
+}
+
+function tcFormatTotal(totalSec) {
+  if (!isFinite(totalSec)) totalSec = 0;
+  const sign = totalSec < 0 ? '-' : '';
+  let abs = Math.abs(totalSec);
+  const ms = Math.round((abs - Math.floor(abs)) * 1000);
+  let whole = Math.floor(abs);
+  const h = Math.floor(whole / 3600);
+  const m = Math.floor((whole % 3600) / 60);
+  const s = whole % 60;
+  const pad = (n, w) => String(n).padStart(w, '0');
+  return sign + pad(h, 2) + ':' + pad(m, 2) + ':' + pad(s, 2) + (ms ? '.' + pad(ms, 3) : '');
+}
+
+function tcRenderRows() {
+  const host = document.getElementById('tc-rows');
+  if (!tcManualRows.length) tcManualRows.push({ id: tcNextRowId++, value: '', sign: 1 });
+  host.innerHTML = tcManualRows.map((r, idx) => {
+    const signLabel = r.sign === -1 ? '−' : '+';
+    const signColor = r.sign === -1 ? 'var(--red)' : 'var(--green)';
+    return '<div class="tc-row" data-id="' + r.id + '" style="display:flex;align-items:center;gap:8px;margin-bottom:6px">' +
+      '<button class="tc-sign" onclick="tcToggleSign(' + r.id + ')" title="Toggle add/subtract" ' +
+        'style="width:30px;height:34px;border-radius:6px;border:1px solid var(--border);background:var(--bg3);color:' + signColor + ';' +
+        'font-family:var(--mono);font-weight:800;font-size:16px;cursor:pointer">' + signLabel + '</button>' +
+      '<input type="text" class="adv-input tc-input" data-id="' + r.id + '" value="' + (r.value || '').replace(/"/g, '&quot;') + '" ' +
+        'placeholder="HH:MM:SS or MM:SS or seconds" spellcheck="false" autocomplete="off" ' +
+        'oninput="tcOnInput(' + r.id + ', this.value)" onkeydown="tcOnKey(event,' + r.id + ')" style="flex:1"/>' +
+      '<button class="merge-file-remove" onclick="tcRemoveRow(' + r.id + ')" title="Remove" ' +
+        'style="width:28px;height:28px">&#10005;</button>' +
+      '</div>';
+  }).join('');
+  // Restore focus if we just added a row at the end
+  if (tcFocusRowId != null) {
+    const inp = host.querySelector('input[data-id="' + tcFocusRowId + '"]');
+    if (inp) inp.focus();
+    tcFocusRowId = null;
+  }
+}
+
+let tcFocusRowId = null;
+
+function tcAddRow() {
+  const id = tcNextRowId++;
+  tcManualRows.push({ id, value: '', sign: 1 });
+  tcFocusRowId = id;
+  tcRenderRows();
+  tcRecalc();
+}
+
+function tcClearRows() {
+  tcManualRows = [{ id: tcNextRowId++, value: '', sign: 1 }];
+  tcRenderRows();
+  tcRecalc();
+}
+
+function tcRemoveRow(id) {
+  tcManualRows = tcManualRows.filter(r => r.id !== id);
+  if (!tcManualRows.length) tcManualRows.push({ id: tcNextRowId++, value: '', sign: 1 });
+  tcRenderRows();
+  tcRecalc();
+}
+
+function tcToggleSign(id) {
+  const r = tcManualRows.find(x => x.id === id);
+  if (!r) return;
+  r.sign = r.sign === -1 ? 1 : -1;
+  tcRenderRows();
+  tcRecalc();
+}
+
+function tcOnInput(id, value) {
+  const r = tcManualRows.find(x => x.id === id);
+  if (!r) return;
+  r.value = value;
+  // Auto-add a new row when the user types in the last empty row.
+  // Append the new row directly to the DOM instead of re-rendering, so the
+  // active input keeps focus and caret position (typing ":" after a digit
+  // used to drop focus / lose the keystroke).
+  const lastRow = tcManualRows[tcManualRows.length - 1];
+  if (lastRow && lastRow.id === id && value.trim() !== '') {
+    const newRow = { id: tcNextRowId++, value: '', sign: 1 };
+    tcManualRows.push(newRow);
+    tcAppendRowDom(newRow);
+  }
+  tcRecalc();
+}
+
+function tcAppendRowDom(r) {
+  const host = document.getElementById('tc-rows');
+  if (!host) return;
+  const signLabel = r.sign === -1 ? '−' : '+';
+  const signColor = r.sign === -1 ? 'var(--red)' : 'var(--green)';
+  const div = document.createElement('div');
+  div.className = 'tc-row';
+  div.setAttribute('data-id', r.id);
+  div.style.cssText = 'display:flex;align-items:center;gap:8px;margin-bottom:6px';
+  div.innerHTML =
+    '<button class="tc-sign" onclick="tcToggleSign(' + r.id + ')" title="Toggle add/subtract" ' +
+      'style="width:30px;height:34px;border-radius:6px;border:1px solid var(--border);background:var(--bg3);color:' + signColor + ';' +
+      'font-family:var(--mono);font-weight:800;font-size:16px;cursor:pointer">' + signLabel + '</button>' +
+    '<input type="text" class="adv-input tc-input" data-id="' + r.id + '" value="" ' +
+      'placeholder="HH:MM:SS or MM:SS or seconds" spellcheck="false" autocomplete="off" ' +
+      'oninput="tcOnInput(' + r.id + ', this.value)" onkeydown="tcOnKey(event,' + r.id + ')" style="flex:1"/>' +
+    '<button class="merge-file-remove" onclick="tcRemoveRow(' + r.id + ')" title="Remove" ' +
+      'style="width:28px;height:28px">&#10005;</button>';
+  host.appendChild(div);
+}
+
+function tcOnKey(e, id) {
+  if (e.key === 'Enter') {
+    e.preventDefault();
+    const idx = tcManualRows.findIndex(r => r.id === id);
+    if (idx === tcManualRows.length - 1) {
+      tcAddRow();
+    } else {
+      const nextId = tcManualRows[idx + 1].id;
+      const next = document.querySelector('input[data-id="' + nextId + '"]');
+      if (next) next.focus();
+    }
+  }
+}
+
+async function tcPickFiles() {
+  const files = await api.chooseFiles({
+    title: 'Select Media Files',
+    filters: [{ name: 'Media Files', extensions: TC_MEDIA_EXTS }]
+  });
+  if (files.length) {
+    tcFiles = files.map(f => ({ path: f, name: f.split(/[/\\]/).pop(), duration: 0 }));
+    await tcProbeDurations();
+    tcRenderFiles();
+    tcShowFilesUI();
+  }
+}
+
+async function tcPickFilesAdd() {
+  const files = await api.chooseFiles({
+    title: 'Add More Files',
+    filters: [{ name: 'Media Files', extensions: TC_MEDIA_EXTS }]
+  });
+  if (files.length) {
+    tcFiles.push(...files.map(f => ({ path: f, name: f.split(/[/\\]/).pop(), duration: 0 })));
+    await tcProbeDurations();
+    tcRenderFiles();
+    tcShowFilesUI();
+  }
+}
+
+function tcClearFiles() {
+  tcFiles = [];
+  tcRenderFiles();
+  tcHideFilesUI();
+  tcRecalc();
+}
+
+async function tcProbeDurations() {
+  const results = await api.probeMergeDurations(tcFiles.map(f => f.path));
+  if (results && results.durations) {
+    results.durations.forEach((dur, i) => {
+      if (i < tcFiles.length) tcFiles[i].duration = dur || 0;
+    });
+  }
+  tcRecalc();
+}
+
+function tcShowFilesUI() {
+  document.getElementById('tc-empty-state').style.display = 'none';
+  document.getElementById('tc-files-actions').style.display = '';
+}
+function tcHideFilesUI() {
+  document.getElementById('tc-empty-state').style.display = '';
+  document.getElementById('tc-files-actions').style.display = 'none';
+  document.getElementById('tc-file-list').innerHTML = '';
+}
+
+function tcRenderFiles() {
+  const el = document.getElementById('tc-file-list');
+  if (!tcFiles.length) { el.innerHTML = ''; return; }
+  el.innerHTML = tcFiles.map((f, i) =>
+    '<div class="merge-file-item" style="cursor:default">' +
+      '<span class="merge-file-index">' + (i + 1) + '</span>' +
+      '<span class="merge-file-name" title="' + (f.path || '').replace(/"/g, '&quot;') + '">' + f.name + '</span>' +
+      '<span class="merge-file-dur">' + formatDuration(f.duration) + '</span>' +
+      '<button class="merge-file-remove" onclick="tcRemoveFile(' + i + ')" title="Remove">&#10005;</button>' +
+    '</div>'
+  ).join('');
+}
+
+function tcRemoveFile(idx) {
+  tcFiles.splice(idx, 1);
+  if (!tcFiles.length) { tcClearFiles(); return; }
+  tcRenderFiles();
+  tcRecalc();
+}
+
+function tcRecalc() {
+  let total = 0, count = 0;
+  if (tcMode === 'manual') {
+    for (const r of tcManualRows) {
+      const v = tcParseTime(r.value);
+      if (v !== 0 || (r.value && r.value.trim() !== '')) count++;
+      total += r.sign * v;
+    }
+  } else {
+    for (const f of tcFiles) {
+      total += f.duration || 0;
+      count++;
+    }
+  }
+  document.getElementById('tc-total').textContent = tcFormatTotal(total);
+  document.getElementById('tc-total-sub').textContent =
+    count + ' item' + (count === 1 ? '' : 's') + ' · ' + total.toFixed(2) + 's';
+}
+
+async function tcCopyTotal() {
+  const val = document.getElementById('tc-total').textContent;
+  try {
+    if (window.api && window.api.clipboardWrite) await window.api.clipboardWrite(val);
+    else await navigator.clipboard.writeText(val);
+    showToast('Copied ' + val, 'success');
+  } catch (e) {
+    showToast('Copy failed', 'error');
+  }
+}
+
+// Native file drag-and-drop for the files panel
+function initTimeCalcWiring() {
+  tcRenderRows();
+  tcRecalc();
+
+  const parent = document.getElementById('view-timecalc');
+  const zone   = document.getElementById('tc-drop-zone');
+  if (!parent || !zone) return;
+
+  parent.addEventListener('dragenter', e => {
+    if (!hasFiles(e.dataTransfer) || tcMode !== 'files') return;
+    e.preventDefault();
+    zone.classList.add('drag-over');
+  });
+  parent.addEventListener('dragover', e => {
+    if (!hasFiles(e.dataTransfer) || tcMode !== 'files') return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'copy';
+    zone.classList.add('drag-over');
+  });
+  parent.addEventListener('dragleave', e => {
+    if (e.target === parent) zone.classList.remove('drag-over');
+  });
+  parent.addEventListener('drop', async e => {
+    if (!hasFiles(e.dataTransfer) || tcMode !== 'files') return;
+    e.preventDefault();
+    e.stopPropagation();
+    zone.classList.remove('drag-over');
+    const files = Array.from(e.dataTransfer.files || []);
+    const paths = files.map(f => f.path).filter(p =>
+      p && TC_MEDIA_EXTS.some(ext => p.toLowerCase().endsWith('.' + ext))
+    );
+    if (!paths.length) {
+      showToast('Drop audio or video files only', 'error');
+      return;
+    }
+    const incoming = paths.map(p => ({ path: p, name: p.split(/[/\\]/).pop(), duration: 0 }));
+    tcFiles = tcFiles.length ? tcFiles.concat(incoming) : incoming;
+    await tcProbeDurations();
+    tcRenderFiles();
+    tcShowFilesUI();
+  });
+}
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', initTimeCalcWiring);
+} else {
+  initTimeCalcWiring();
 }
 </script>
 </body>

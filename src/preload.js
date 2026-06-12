@@ -1,6 +1,11 @@
 const { contextBridge, ipcRenderer } = require('electron');
 
 contextBridge.exposeInMainWorld('api', {
+  // Platform info (used by renderer to swap Windows chrome for native Mac chrome)
+  platform: process.platform,
+  isMac:    process.platform === 'darwin',
+  isWin:    process.platform === 'win32',
+
   // Window controls
   minimize: ()  => ipcRenderer.send('win-minimize'),
   maximize: ()  => ipcRenderer.send('win-maximize'),
@@ -73,6 +78,23 @@ contextBridge.exposeInMainWorld('api', {
   onLtProgress: (cb) => {
     ipcRenderer.removeAllListeners('lt-progress');
     ipcRenderer.on('lt-progress', (_e, msg) => cb(msg));
+  },
+
+  // Merge Videos
+  probeMergeDurations: (paths) => ipcRenderer.invoke('probe-merge-durations', paths),
+  mergeVideos:  (opts) => ipcRenderer.invoke('merge-videos', opts),
+  onMergeProgress: (cb) => {
+    ipcRenderer.removeAllListeners('merge-progress');
+    ipcRenderer.on('merge-progress', (_e, msg) => cb(msg));
+  },
+
+  // Podcast
+  mergePodcast: (opts) => ipcRenderer.invoke('merge-podcast', opts),
+  openTimecodesWindow: (payload) => ipcRenderer.invoke('open-timecodes-window', payload),
+  clipboardWrite: (text) => ipcRenderer.invoke('clipboard-write', text),
+  onPodcastProgress: (cb) => {
+    ipcRenderer.removeAllListeners('podcast-progress');
+    ipcRenderer.on('podcast-progress', (_e, msg) => cb(msg));
   },
 
   // Report issue

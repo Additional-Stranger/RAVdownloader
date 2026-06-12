@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, dialog, shell, Menu } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, shell, Menu, clipboard } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const { spawn } = require('child_process');
@@ -6,28 +6,40 @@ const https = require('https');
 const http  = require('http');
 
 // ─── App info ────────────────────────────────────────────────────────────────
-const APP_VERSION = '2.4.0';
-const APP_VERSION_DATE = '4-2-26';
+const APP_VERSION = '3.0.2';
+const APP_VERSION_DATE = '6-8-26';
 // URL to a JSON file you host: { "version": "2.1.0", "downloadUrl": "https://..." }
 const APP_UPDATE_URL = 'https://ravdownloader-update.djcolinchristy.workers.dev/';
+
+// ─── Platform ────────────────────────────────────────────────────────────────
+const IS_MAC = process.platform === 'darwin';
+const IS_WIN = process.platform === 'win32';
+const EXE_SUFFIX = IS_WIN ? '.exe' : '';
+const YTDLP_NAME   = IS_WIN ? 'yt-dlp.exe'   : 'yt-dlp';
+const FFMPEG_NAME  = IS_WIN ? 'ffmpeg.exe'   : 'ffmpeg';
+const FFPROBE_NAME = IS_WIN ? 'ffprobe.exe'  : 'ffprobe';
 
 // ─── Binary paths ─────────────────────────────────────────────────────────────
 const isDev = !app.isPackaged;
 
-// Try multiple candidate locations in order, use the first one that contains yt-dlp.exe
+// In dev the local source-tree binary folder differs per platform (bin/ vs bin-mac/).
+// In production both platforms unpack into process.resourcesPath/bin.
+const DEV_BIN_FOLDER = IS_MAC ? 'bin-mac' : 'bin';
+
+// Try multiple candidate locations in order, use the first one that contains yt-dlp
 function findBinDir() {
   const candidates = isDev ? [
-    path.join(__dirname, '..', 'bin'),           // normal: src/../bin
-    path.join(__dirname, 'bin'),                  // if main.js is at root
-    path.join(process.cwd(), 'bin'),              // cwd/bin
-    path.join(app.getAppPath(), 'bin'),           // appPath/bin
+    path.join(__dirname, '..', DEV_BIN_FOLDER),
+    path.join(__dirname, DEV_BIN_FOLDER),
+    path.join(process.cwd(), DEV_BIN_FOLDER),
+    path.join(app.getAppPath(), DEV_BIN_FOLDER),
   ] : [
     path.join(process.resourcesPath, 'bin'),
     path.join(path.dirname(app.getPath('exe')), 'resources', 'bin'),
   ];
 
   for (const c of candidates) {
-    const ytdlp = path.join(c, 'yt-dlp.exe');
+    const ytdlp = path.join(c, YTDLP_NAME);
     if (fs.existsSync(ytdlp)) {
       return c;
     }
@@ -37,9 +49,9 @@ function findBinDir() {
 }
 
 const BIN_DIR = findBinDir();
-const YTDLP   = path.join(BIN_DIR, 'yt-dlp.exe');
-const FFMPEG  = path.join(BIN_DIR, 'ffmpeg.exe');
-const FFPROBE = path.join(BIN_DIR, 'ffprobe.exe');
+const YTDLP   = path.join(BIN_DIR, YTDLP_NAME);
+const FFMPEG  = path.join(BIN_DIR, FFMPEG_NAME);
+const FFPROBE = path.join(BIN_DIR, FFPROBE_NAME);
 
 // ─── Data paths ───────────────────────────────────────────────────────────────
 const USER_DATA  = app.getPath('userData');
@@ -80,7 +92,10 @@ function logEntry(entry) {
   try {
     const date = new Date().toISOString().split('T')[0];
     const logFile = path.join(LOG_DIR, `${date}.log`);
-    fs.appendFileSync(logFile, `[${new Date().toISOString()}] ${JSON.stringify(entry)}\n`);
+    let user = '';
+    try { user = readStore().userName || ''; } catch {}
+    const enriched = { user, ...entry };
+    fs.appendFileSync(logFile, `[${new Date().toISOString()}] ${JSON.stringify(enriched)}\n`);
   } catch {}
 }
 
@@ -221,7 +236,7 @@ function runExe(exePath, args, timeoutMs = 30000) {
     try {
       proc = spawn(exePath, args, {
         windowsHide: true,
-        env: { ...process.env, PATH: BIN_DIR + ';' + (process.env.PATH || '') },
+        env: { ...process.env, PATH: BIN_DIR + path.delimiter + (process.env.PATH || '') },
       });
     } catch (spawnErr) {
       resolve({ stdout: '', stderr: spawnErr.message, code: -1 });
@@ -260,8 +275,8 @@ function cookiesToNetscape(cookies) {
   return lines.join('\n') + '\n';
 }
 
-// ─── PDF to PNG (using pdfjs-dist in a hidden renderer) ──────────────────────
-async function convertPdfToPng(inputPath, outputDir, baseName) {
+// ─── PDF to PNG/JPG (using pdfjs-dist in a hidden renderer) ──────────────────
+async function convertPdfToImage(inputPath, outputDir, baseName, imgFormat = 'png') {
   return new Promise(async (resolveOuter) => {
     let pdfWin;
     try {
@@ -314,11 +329,15 @@ async function convertPdfToPng(inputPath, outputDir, baseName) {
               ctx.clearRect(0, 0, canvas.width, canvas.height);
               await page.render({ canvasContext: ctx, viewport }).promise;
 
-              const dataUrl = canvas.toDataURL('image/png');
-              const b64 = dataUrl.replace(/^data:image\\/png;base64,/, '');
+              const imgFormat = ${JSON.stringify(imgFormat)};
+              const mime = imgFormat === 'jpg' ? 'image/jpeg' : 'image/png';
+              const dataUrl = imgFormat === 'jpg'
+                ? canvas.toDataURL('image/jpeg', 0.92)
+                : canvas.toDataURL('image/png');
+              const b64 = dataUrl.replace(/^data:[^;]+;base64,/, '');
               const outFile = pathMod.join(
                 ${JSON.stringify(outputDir)},
-                ${JSON.stringify(baseName)} + '_page_' + String(i).padStart(3, '0') + '.png'
+                ${JSON.stringify(baseName)} + '_page_' + String(i).padStart(3, '0') + '.' + imgFormat
               );
               fs.writeFileSync(outFile, Buffer.from(b64, 'base64'));
             }
@@ -348,14 +367,56 @@ async function convertPdfToPng(inputPath, outputDir, baseName) {
 const activeProcs = new Map();
 let mainWindow;
 
+function buildMacMenu() {
+  const template = [
+    {
+      label: app.name,
+      submenu: [
+        { role: 'about' },
+        { type: 'separator' },
+        { role: 'hide' },
+        { role: 'hideOthers' },
+        { role: 'unhide' },
+        { type: 'separator' },
+        { role: 'quit' },
+      ],
+    },
+    {
+      label: 'Edit',
+      submenu: [
+        { role: 'undo' },
+        { role: 'redo' },
+        { type: 'separator' },
+        { role: 'cut' },
+        { role: 'copy' },
+        { role: 'paste' },
+        { role: 'selectAll' },
+      ],
+    },
+    {
+      label: 'View',
+      submenu: [
+        { role: 'reload' },
+        { role: 'togglefullscreen' },
+      ],
+    },
+    {
+      label: 'Window',
+      submenu: [
+        { role: 'minimize' },
+        { role: 'close' },
+      ],
+    },
+  ];
+  Menu.setApplicationMenu(Menu.buildFromTemplate(template));
+}
+
 function createWindow() {
-  mainWindow = new BrowserWindow({
+  const windowOpts = {
     width: 1200, height: 820,
     minWidth: 960, minHeight: 660,
-    frame: false,
     transparent: false,
-    backgroundColor: '#0c0c0e',
-    icon: path.join(__dirname, '..', 'assets', 'icon.ico'),
+    backgroundColor: '#0a0820',
     show: false,
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
@@ -363,7 +424,18 @@ function createWindow() {
       nodeIntegration: false,
       spellcheck: false,
     },
-  });
+  };
+  if (IS_MAC) {
+    // Show native traffic lights but keep the custom dark title bar area for branding/drag.
+    windowOpts.titleBarStyle = 'hiddenInset';
+    windowOpts.trafficLightPosition = { x: 18, y: 18 };
+  } else {
+    // Windows: frameless, custom min/max/close buttons in the renderer.
+    windowOpts.frame = false;
+    windowOpts.icon = path.join(__dirname, '..', 'assets', 'icon.ico');
+  }
+
+  mainWindow = new BrowserWindow(windowOpts);
 
   mainWindow.loadFile(path.join(__dirname, 'renderer', 'index.html'));
   mainWindow.once('ready-to-show', () => mainWindow.show());
@@ -381,7 +453,11 @@ function createWindow() {
     }
   });
 
-  Menu.setApplicationMenu(null);
+  if (IS_MAC) {
+    buildMacMenu();
+  } else {
+    Menu.setApplicationMenu(null);
+  }
 }
 
 app.whenReady().then(createWindow);
@@ -436,7 +512,7 @@ ipcMain.handle('open-log-folder', () => {
 // ─── Get formats (quality picker) ─────────────────────────────────────────────
 ipcMain.handle('get-formats', async (_e, url) => {
   if (!binaryOk(YTDLP)) {
-    return { error: `yt-dlp.exe not found.\n\nExpected location:\n${YTDLP}\n\nPlease place yt-dlp.exe in the bin/ folder.` };
+    return { error: `${YTDLP_NAME} not found.\n\nExpected location:\n${YTDLP}\n\nPlease place ${YTDLP_NAME} in the bin/ folder.` };
   }
 
   const fmtArgs = [
@@ -499,7 +575,7 @@ ipcMain.handle('get-formats', async (_e, url) => {
 // ─── Start download ───────────────────────────────────────────────────────────
 ipcMain.handle('start-download', async (_e, { id, url, type, formatId, bandwidth, playlistStart, playlistEnd, advanced }) => {
   if (!binaryOk(YTDLP)) {
-    return { success: false, error: `yt-dlp.exe not found in bin/ folder.\n\nExpected: ${YTDLP}` };
+    return { success: false, error: `${YTDLP_NAME} not found in bin/ folder.\n\nExpected: ${YTDLP}` };
   }
 
   const settings = readStore();
@@ -521,7 +597,7 @@ ipcMain.handle('start-download', async (_e, { id, url, type, formatId, bandwidth
     );
   } else {
     if (!binaryOk(FFMPEG)) {
-      return { success: false, error: `ffmpeg.exe not found in bin/ folder.\n\nExpected: ${FFMPEG}` };
+      return { success: false, error: `${FFMPEG_NAME} not found in bin/ folder.\n\nExpected: ${FFMPEG}` };
     }
     const filenameTemplate = (advanced && advanced.customFilename)
       ? advanced.customFilename + '.%(ext)s'
@@ -568,7 +644,7 @@ ipcMain.handle('start-download', async (_e, { id, url, type, formatId, bandwidth
     try {
       proc = spawn(YTDLP, args, {
         windowsHide: true,
-        env: { ...process.env, PATH: BIN_DIR + ';' + (process.env.PATH || '') },
+        env: { ...process.env, PATH: BIN_DIR + path.delimiter + (process.env.PATH || '') },
       });
     } catch (spawnErr) {
       resolve({ success: false, error: 'Failed to start yt-dlp: ' + spawnErr.message });
@@ -655,7 +731,7 @@ ipcMain.handle('start-download', async (_e, { id, url, type, formatId, bandwidth
       if (type !== 'mp3' && mergedFile && binaryOk(FFMPEG) && fs.existsSync(mergedFile)) {
         try {
           const probe = await runExe(
-            path.join(BIN_DIR, 'ffprobe.exe'),
+            FFPROBE,
             ['-v', 'quiet', '-select_streams', 'v:0', '-show_entries', 'stream=codec_name', '-of', 'csv=p=0', mergedFile],
             10000
           );
@@ -862,7 +938,7 @@ ipcMain.handle('pause-download', (_e, id) => {
 
 // ─── yt-dlp version ───────────────────────────────────────────────────────────
 ipcMain.handle('get-ytdlp-version', async () => {
-  if (!binaryOk(YTDLP)) return 'yt-dlp.exe not found in bin/';
+  if (!binaryOk(YTDLP)) return `${YTDLP_NAME} not found in bin/`;
   const { stdout, code } = await runExe(YTDLP, ['--version'], 10000);
   return (code === 0 && stdout.trim()) ? stdout.trim() : 'Error reading version';
 });
@@ -921,10 +997,12 @@ ipcMain.handle('update-ytdlp', (_e, useNightly = true) => {
         try {
           const release = JSON.parse(body);
           tagName = release.tag_name || '';
-          const asset = (release.assets || []).find(a => a.name === 'yt-dlp.exe');
-          if (!asset) { resolve({ success: false, error: 'yt-dlp.exe asset not found in latest release' }); return; }
+          // Windows: yt-dlp.exe asset. Mac: yt-dlp_macos (universal binary).
+          const ytdlpAssetName = IS_WIN ? 'yt-dlp.exe' : 'yt-dlp_macos';
+          const asset = (release.assets || []).find(a => a.name === ytdlpAssetName);
+          if (!asset) { resolve({ success: false, error: `${ytdlpAssetName} asset not found in latest release` }); return; }
           downloadUrl = asset.browser_download_url;
-          send(`Found ${tagName}. Downloading yt-dlp.exe...`);
+          send(`Found ${tagName}. Downloading ${ytdlpAssetName}...`);
         } catch (err) {
           resolve({ success: false, error: 'GitHub parse error: ' + err.message });
           return;
@@ -950,12 +1028,14 @@ ipcMain.handle('update-ytdlp', (_e, useNightly = true) => {
             }
             const totalBytes = parseInt(res2.headers['content-length'], 10) || 0;
             let downloaded = 0;
+            let lastPctSent = -1;
             res2.on('data', chunk => {
               downloaded += chunk.length;
-              const mb = (downloaded / 1048576).toFixed(1);
               const pct = totalBytes > 0 ? Math.round((downloaded / totalBytes) * 100) : 0;
-              send(`Downloading... ${mb} MB`);
-              mainWindow?.webContents.send('ytdlp-download-progress', { downloaded, totalBytes, pct });
+              if (pct !== lastPctSent) {
+                lastPctSent = pct;
+                mainWindow?.webContents.send('ytdlp-download-progress', { downloaded, totalBytes, pct });
+              }
             });
             res2.pipe(fileStream);
             fileStream.on('finish', () => {
@@ -967,6 +1047,10 @@ ipcMain.handle('update-ytdlp', (_e, useNightly = true) => {
                     if (binaryOk(YTDLP)) fs.copyFileSync(YTDLP, backupPath);
                     fs.copyFileSync(tmpPath, YTDLP);
                     try { fs.unlinkSync(tmpPath); } catch {}
+                    // Mac/Linux: downloaded binary must be marked executable
+                    if (!IS_WIN) {
+                      try { fs.chmodSync(YTDLP, 0o755); } catch {}
+                    }
 
                     // Verify after short delay
                     setTimeout(() => {
@@ -1000,7 +1084,7 @@ ipcMain.handle('update-ytdlp', (_e, useNightly = true) => {
 // ─── Supported sites ──────────────────────────────────────────────────────────
 ipcMain.handle('get-supported-sites', async () => {
   if (!binaryOk(YTDLP)) {
-    return { error: `yt-dlp.exe not found.\n\nExpected location:\n${YTDLP}` };
+    return { error: `${YTDLP_NAME} not found.\n\nExpected location:\n${YTDLP}` };
   }
   const { stdout, stderr, code } = await runExe(YTDLP, ['--list-extractors'], 30000);
   if (code !== 0) return { error: stderr || 'Failed to list extractors' };
@@ -1022,7 +1106,7 @@ ipcMain.handle('choose-files', async (_e, { title, filters }) => {
 ipcMain.handle('convert-file', (_e, { inputPath, outputFormat, outputDir }) => {
   return new Promise((resolve) => {
     if (!binaryOk(FFMPEG)) {
-      resolve({ success: false, error: `ffmpeg.exe not found in bin/ folder.\n\nExpected: ${FFMPEG}` });
+      resolve({ success: false, error: `${FFMPEG_NAME} not found in bin/ folder.\n\nExpected: ${FFMPEG}` });
       return;
     }
     const base = path.basename(inputPath, path.extname(inputPath));
@@ -1032,8 +1116,12 @@ ipcMain.handle('convert-file', (_e, { inputPath, outputFormat, outputDir }) => {
     let args;
     if (outputFormat === 'png') {
       args = ['-i', inputPath, '-y', outPath];
-    } else if (outputFormat === 'pdf-png') {
-      convertPdfToPng(inputPath, outputDir, base)
+    } else if (outputFormat === 'jpg' || outputFormat === 'jpeg') {
+      // High-quality JPEG (q:v 2 ≈ quality 90). yuvj420p ensures broad compatibility.
+      args = ['-i', inputPath, '-q:v', '2', '-pix_fmt', 'yuvj420p', '-y', outPath];
+    } else if (outputFormat === 'pdf-png' || outputFormat === 'pdf-jpg') {
+      const imgFmt = outputFormat === 'pdf-jpg' ? 'jpg' : 'png';
+      convertPdfToImage(inputPath, outputDir, base, imgFmt)
         .then(result => {
           logEntry({ event: 'convert', inputPath, outputFormat, code: result.success ? 0 : 1 });
           resolve(result);
@@ -1184,7 +1272,7 @@ ipcMain.handle('get-lt-files', () => {
 });
 
 ipcMain.handle('generate-lower-third', async (_e, { line1, line2, fontSize1, fontSize2, x1, y1, x2, y2, duration, forceUppercase }) => {
-  if (!binaryOk(FFMPEG)) return { success: false, error: 'ffmpeg.exe not found in bin/ folder' };
+  if (!binaryOk(FFMPEG)) return { success: false, error: `${FFMPEG_NAME} not found in bin/ folder` };
 
   const ltDir = resolveLtDir();
   if (!ltDir) return { success: false, error: 'LowerThird Files folder not found' };
@@ -1282,6 +1370,455 @@ ipcMain.handle('generate-lower-third', async (_e, { line1, line2, fontSize1, fon
       }
     });
   });
+});
+
+// ─── Merge Videos ─────────────────────────────────────────────��──────────────
+
+// Probe durations for multiple files
+ipcMain.handle('probe-merge-durations', async (_e, paths) => {
+  if (!binaryOk(FFPROBE)) return { durations: paths.map(() => 0), resolutions: paths.map(() => null) };
+  const durations = [];
+  const resolutions = [];
+  for (const filePath of paths) {
+    try {
+      const { stdout, code } = await runExe(FFPROBE, [
+        '-v', 'quiet',
+        '-show_entries', 'format=duration:stream=width,height',
+        '-select_streams', 'v:0',
+        '-of', 'json', filePath,
+      ], 10000);
+      if (code === 0) {
+        const data = JSON.parse(stdout);
+        durations.push(parseFloat(data.format?.duration) || 0);
+        const s = data.streams?.[0];
+        resolutions.push(s ? { w: s.width, h: s.height } : null);
+      } else {
+        durations.push(0);
+        resolutions.push(null);
+      }
+    } catch {
+      durations.push(0);
+      resolutions.push(null);
+    }
+  }
+  return { durations, resolutions };
+});
+
+ipcMain.handle('merge-videos', async (_e, { files, hardLimiter, crossDissolve, dipToWhite, removeAudio, customFilename, outputDir, forceResolution }) => {
+  if (!binaryOk(FFMPEG)) return { success: false, error: `${FFMPEG_NAME} not found in bin/ folder` };
+  if (!files || files.length < 2) return { success: false, error: 'At least 2 files are required' };
+
+  for (const f of files) {
+    if (!fs.existsSync(f)) return { success: false, error: 'File not found: ' + f };
+  }
+
+  const defaultName = customFilename || 'merged_' + Date.now();
+  const outDir = outputDir || path.dirname(files[0]);
+  ensureDir(outDir);
+
+  // Show save dialog
+  const result = await dialog.showSaveDialog(mainWindow, {
+    title: 'Save Merged Video',
+    defaultPath: path.join(readStore().downloadPath || app.getPath('downloads'), defaultName + '.mp4'),
+    filters: [{ name: 'MP4 Video', extensions: ['mp4'] }],
+  });
+
+  if (result.canceled || !result.filePath) return { success: false, error: 'Merge cancelled' };
+  const outputPath = result.filePath;
+
+  // Probe durations for transition math
+  const durations = [];
+  for (const f of files) {
+    try {
+      const { stdout, code } = await runExe(FFPROBE, [
+        '-v', 'quiet', '-show_entries', 'format=duration', '-of', 'csv=p=0', f,
+      ], 10000);
+      durations.push(code === 0 ? parseFloat(stdout.trim()) || 0 : 0);
+    } catch { durations.push(0); }
+  }
+  const totalDuration = durations.reduce((a, b) => a + b, 0);
+
+  const useTransition = crossDissolve || dipToWhite;
+  const transitionDuration = 0.5; // seconds
+
+  // Determine target resolution
+  const scaleW = forceResolution === '720p' ? 1280 : forceResolution === '1080p' ? 1920 : 0;
+  const scaleH = forceResolution === '720p' ? 720 : forceResolution === '1080p' ? 1080 : 0;
+  // Scale + pad to target frame (letterbox/pillarbox to preserve aspect ratio)
+  const scaleFilter = scaleW ? `scale=${scaleW}:${scaleH}:force_original_aspect_ratio=decrease,pad=${scaleW}:${scaleH}:(ow-iw)/2:(oh-ih)/2:black,setsar=1` : '';
+  // Normalize filter ensures all streams have matching format/fps for xfade compatibility
+  const normVideo = (i) => {
+    const parts = [];
+    if (scaleFilter) parts.push(scaleFilter);
+    parts.push('format=yuv420p', 'fps=30');
+    return `[${i}:v]${parts.join(',')}[nv${i}]`;
+  };
+  const normAudio = (i) => `[${i}:a]aformat=sample_rates=48000:channel_layouts=stereo[na${i}]`;
+
+  logEntry({ event: 'merge-start', fileCount: files.length, crossDissolve, dipToWhite, hardLimiter, removeAudio, forceResolution, outputPath });
+  mainWindow?.webContents.send('merge-progress', JSON.stringify({ status: 'running', pct: 0, msg: 'Starting merge...' }));
+
+  return new Promise((resolve) => {
+    let args = [];
+    const n = files.length;
+
+    // Add all inputs
+    for (const f of files) args.push('-i', f);
+
+    if (useTransition && n >= 2) {
+      // xfade requires normalized inputs (same resolution, fps, pixel format)
+      const filterParts = [];
+
+      // Normalize all video and audio streams
+      for (let i = 0; i < n; i++) {
+        filterParts.push(normVideo(i));
+        if (!removeAudio) filterParts.push(normAudio(i));
+      }
+
+      // Build xfade chain for video
+      let offset = durations[0] - transitionDuration;
+      let lastVLabel = '[nv0]';
+
+      for (let i = 1; i < n; i++) {
+        const outLabel = i < n - 1 ? `[xv${i}]` : '[outv]';
+        const transition = dipToWhite ? 'fadewhite' : 'fade';
+        filterParts.push(`${lastVLabel}[nv${i}]xfade=transition=${transition}:duration=${transitionDuration}:offset=${Math.max(0, offset).toFixed(3)}${outLabel}`);
+        lastVLabel = outLabel;
+        offset += durations[i] - transitionDuration;
+      }
+
+      // Build acrossfade chain for audio
+      if (!removeAudio) {
+        let lastALabel = '[na0]';
+        for (let i = 1; i < n; i++) {
+          const outLabel = i < n - 1 ? `[xa${i}]` : '[outa]';
+          filterParts.push(`${lastALabel}[na${i}]acrossfade=d=${transitionDuration}:c1=tri:c2=tri${outLabel}`);
+          lastALabel = outLabel;
+        }
+      }
+
+      args.push('-filter_complex', filterParts.join(';'));
+      args.push('-map', '[outv]');
+      if (!removeAudio) args.push('-map', '[outa]');
+
+    } else if (scaleFilter) {
+      // No transitions but need scaling — use filter_complex concat
+      const filterParts = [];
+      for (let i = 0; i < n; i++) {
+        filterParts.push(`[${i}:v]${scaleFilter},format=yuv420p[sv${i}]`);
+      }
+      if (removeAudio) {
+        const vInputs = Array.from({ length: n }, (_, i) => `[sv${i}]`).join('');
+        filterParts.push(`${vInputs}concat=n=${n}:v=1:a=0[outv]`);
+        args.push('-filter_complex', filterParts.join(';'));
+        args.push('-map', '[outv]');
+      } else {
+        const inputs = Array.from({ length: n }, (_, i) => `[sv${i}][${i}:a]`).join('');
+        filterParts.push(`${inputs}concat=n=${n}:v=1:a=1[outv][outa]`);
+        args.push('-filter_complex', filterParts.join(';'));
+        args.push('-map', '[outv]');
+        args.push('-map', '[outa]');
+      }
+
+    } else {
+      // Simple concat demuxer (no transitions, no scaling)
+      const concatListPath = path.join(app.getPath('temp'), 'merge_list_' + Date.now() + '.txt');
+      const concatContent = files.map(f => `file '${f.replace(/'/g, "'\\''")}'`).join('\n');
+      fs.writeFileSync(concatListPath, concatContent);
+      args.push('-f', 'concat', '-safe', '0', '-i', concatListPath);
+    }
+
+    // Video codec
+    args.push('-c:v', 'libx264', '-preset', 'fast', '-crf', '18', '-pix_fmt', 'yuv420p', '-movflags', '+faststart');
+
+    const hasFilterComplex = args.includes('-filter_complex');
+
+    if (removeAudio) {
+      args.push('-an');
+    } else {
+      args.push('-c:a', 'aac', '-b:a', '192k');
+      if (hardLimiter && !hasFilterComplex) {
+        // Simple concat mode — use -af
+        args.push('-af', 'alimiter=limit=0.251189:level=0');
+      }
+    }
+
+    // For filter_complex modes with hard limiter, append alimiter to the audio chain
+    if (hasFilterComplex && hardLimiter && !removeAudio) {
+      const fcIdx = args.indexOf('-filter_complex');
+      if (fcIdx !== -1) {
+        args[fcIdx + 1] = args[fcIdx + 1].replace(/\[outa\]$/, '[outa_pre]') + ';[outa_pre]alimiter=limit=0.251189:level=0[outa]';
+      }
+    }
+
+    args.push('-y', outputPath);
+
+    let proc;
+    try {
+      proc = spawn(FFMPEG, args, { windowsHide: true });
+    } catch (err) {
+      return resolve({ success: false, error: err.message });
+    }
+
+    let stderr = '';
+    proc.stderr.on('data', d => {
+      const chunk = d.toString();
+      stderr += chunk;
+      const timeMatch = chunk.match(/time=(\d+):(\d+):(\d+)\.(\d+)/);
+      if (timeMatch) {
+        const secs = parseInt(timeMatch[1]) * 3600 + parseInt(timeMatch[2]) * 60 + parseInt(timeMatch[3]);
+        const pct = totalDuration > 0 ? Math.min(99, Math.round((secs / totalDuration) * 100)) : 0;
+        mainWindow?.webContents.send('merge-progress', JSON.stringify({ status: 'running', pct, msg: `Encoding: ${pct}%` }));
+      }
+    });
+
+    proc.on('error', err => {
+      logEntry({ event: 'merge-error', error: err.message });
+      resolve({ success: false, error: err.message });
+    });
+
+    proc.on('close', code => {
+      logEntry({ event: 'merge-done', code, outputPath });
+      if (code === 0 && fs.existsSync(outputPath)) {
+        mainWindow?.webContents.send('merge-progress', JSON.stringify({ status: 'done', pct: 100, msg: 'Merge complete!' }));
+        resolve({ success: true, outputPath });
+      } else {
+        mainWindow?.webContents.send('merge-progress', JSON.stringify({ status: 'error', pct: 0, msg: 'Merge failed' }));
+        resolve({ success: false, error: stderr.slice(-400) });
+      }
+    });
+  });
+});
+
+// ─── Podcast: merge clips into MP4 + MP3, return ad-roll timecodes ──────────
+function formatTimecode(seconds) {
+  const totalMs = Math.max(0, Math.round(seconds * 1000));
+  const h  = Math.floor(totalMs / 3600000);
+  const m  = Math.floor((totalMs % 3600000) / 60000);
+  const s  = Math.floor((totalMs % 60000) / 1000);
+  const ms = totalMs % 1000;
+  const pad = (n, w) => String(n).padStart(w, '0');
+  return `${pad(h, 2)}:${pad(m, 2)}:${pad(s, 2)}.${pad(ms, 3)}`;
+}
+
+function blockLetter(n) {
+  // 0 → A, 1 → B, ..., 25 → Z, 26 → AA, 27 → AB ...
+  let s = '';
+  n = n + 1;
+  while (n > 0) {
+    n -= 1;
+    s = String.fromCharCode(65 + (n % 26)) + s;
+    n = Math.floor(n / 26);
+  }
+  return s;
+}
+
+ipcMain.handle('merge-podcast', async (_e, { files, hardLimiter, filename, outputDir, exportMp4, exportMp3 }) => {
+  if (!binaryOk(FFMPEG))  return { success: false, error: `${FFMPEG_NAME} not found in bin/ folder` };
+  if (!binaryOk(FFPROBE)) return { success: false, error: `${FFPROBE_NAME} not found in bin/ folder` };
+  if (!files || files.length < 2) return { success: false, error: 'At least 2 files are required' };
+  for (const f of files) {
+    if (!fs.existsSync(f)) return { success: false, error: 'File not found: ' + f };
+  }
+
+  const wantMp4 = exportMp4 !== false;
+  const wantMp3 = exportMp3 !== false;
+  if (!wantMp4 && !wantMp3) return { success: false, error: 'Select at least one output format (MP4 or MP3)' };
+
+  // Sanitize filename
+  const cleanName = (filename || '').trim().replace(/[\\/:*?"<>|]/g, '').replace(/\.[^.]+$/, '');
+  const baseName  = cleanName || ('podcast_' + Date.now());
+  const outDir    = outputDir || readStore().downloadPath || app.getPath('downloads');
+  ensureDir(outDir);
+  const mp4Path = path.join(outDir, baseName + '.mp4');
+  const mp3Path = path.join(outDir, baseName + '.mp3');
+
+  // Probe each clip: duration, video codec/dims, audio codec/params (one ffprobe per file)
+  const probes = [];
+  for (const f of files) {
+    try {
+      const { stdout, code } = await runExe(FFPROBE, [
+        '-v', 'quiet',
+        '-show_entries', 'format=duration:stream=codec_type,codec_name,width,height,sample_rate,channels',
+        '-of', 'json', f,
+      ], 10000);
+      if (code === 0) {
+        const data = JSON.parse(stdout);
+        const dur = parseFloat(data.format && data.format.duration) || 0;
+        const streams = Array.isArray(data.streams) ? data.streams : [];
+        const v = streams.find(s => s.codec_type === 'video');
+        const a = streams.find(s => s.codec_type === 'audio');
+        probes.push({
+          duration: dur,
+          v: v ? { codec: v.codec_name, w: parseInt(v.width) || 0, h: parseInt(v.height) || 0 } : null,
+          a: a ? { codec: a.codec_name, sample_rate: parseInt(a.sample_rate) || 0, channels: parseInt(a.channels) || 0 } : null,
+        });
+      } else {
+        probes.push({ duration: 0, v: null, a: null });
+      }
+    } catch {
+      probes.push({ duration: 0, v: null, a: null });
+    }
+  }
+  const durations = probes.map(p => p.duration);
+  const totalDuration = durations.reduce((a, b) => a + b, 0);
+
+  // Break timecodes (cumulative durations — N-1 breaks for N clips)
+  const breaks = [];
+  let cum = 0;
+  for (let i = 0; i < files.length - 1; i++) {
+    cum += durations[i];
+    breaks.push({
+      number:   i + 1,
+      timecode: formatTimecode(cum),
+      label:    `BREAK ${i + 1} (${blockLetter(i)} Block into ${blockLetter(i + 1)} Block)`,
+    });
+  }
+
+  // Target resolution = Block A's resolution (fallback 1920×1080 if probe failed)
+  const blockA  = probes[0];
+  const targetW = (blockA && blockA.v && blockA.v.w) || 1920;
+  const targetH = (blockA && blockA.v && blockA.v.h) || 1080;
+
+  // Always re-encode through the concat filter. Stream-copy via the concat demuxer is
+  // unsafe for arbitrary MP4s — even when codec/resolution match, mismatched timebases or
+  // unaligned audio/video sample boundaries cause A/V drift and truncated last clips.
+  const n = files.length;
+  const W = targetW, H = targetH;
+  const filterParts = [];
+  if (wantMp4) {
+    for (let i = 0; i < n; i++) {
+      filterParts.push(`[${i}:v]scale=${W}:${H}:force_original_aspect_ratio=decrease,pad=${W}:${H}:(ow-iw)/2:(oh-ih)/2:black,setsar=1,format=yuv420p,fps=30[v${i}]`);
+    }
+  }
+  for (let i = 0; i < n; i++) {
+    filterParts.push(`[${i}:a]aformat=sample_rates=48000:channel_layouts=stereo[a${i}]`);
+  }
+  if (wantMp4) {
+    const cinp = Array.from({ length: n }, (_, i) => `[v${i}][a${i}]`).join('');
+    filterParts.push(`${cinp}concat=n=${n}:v=1:a=1[outv][a_concat]`);
+  } else {
+    const cinp = Array.from({ length: n }, (_, i) => `[a${i}]`).join('');
+    filterParts.push(`${cinp}concat=n=${n}:v=0:a=1[a_concat]`);
+  }
+  if (hardLimiter) {
+    filterParts.push(`[a_concat]alimiter=limit=0.251189:level=0[a_processed]`);
+  } else {
+    filterParts.push(`[a_concat]anull[a_processed]`);
+  }
+  if (wantMp4 && wantMp3) {
+    filterParts.push(`[a_processed]asplit=2[outa_mp4][outa_mp3]`);
+  } else if (wantMp4) {
+    filterParts.push(`[a_processed]anull[outa_mp4]`);
+  } else {
+    filterParts.push(`[a_processed]anull[outa_mp3]`);
+  }
+
+  const args = [];
+  for (const f of files) args.push('-i', f);
+  args.push('-filter_complex', filterParts.join(';'));
+  if (wantMp4) {
+    args.push('-map', '[outv]', '-map', '[outa_mp4]');
+    args.push('-c:v', 'libx264', '-preset', 'veryfast', '-crf', '20', '-pix_fmt', 'yuv420p');
+    args.push('-c:a', 'aac', '-b:a', '192k', '-movflags', '+faststart');
+    args.push('-y', mp4Path);
+  }
+  if (wantMp3) {
+    args.push('-map', '[outa_mp3]', '-c:a', 'libmp3lame', '-b:a', '192k');
+    args.push('-y', mp3Path);
+  }
+
+  logEntry({ event: 'podcast-start', fileCount: n, hardLimiter, wantMp4, wantMp3, targetW, targetH });
+  mainWindow?.webContents.send('podcast-progress', JSON.stringify({
+    status: 'running', pct: 0, etaSec: null, speed: null, msg: 'Encoding…',
+  }));
+
+  return new Promise((resolve) => {
+    let proc;
+    try {
+      proc = spawn(FFMPEG, args, { windowsHide: true });
+    } catch (err) {
+      return resolve({ success: false, error: err.message });
+    }
+
+    let stderr = '';
+    let lastSpeed = 0;
+    proc.stderr.on('data', d => {
+      const chunk = d.toString();
+      stderr += chunk;
+      // Use the LAST time= and speed= in this chunk (ffmpeg overwrites the status line).
+      let m, lastT = null, lastS = null;
+      const tRe = /time=(\d+):(\d+):(\d+)\.(\d+)/g;
+      while ((m = tRe.exec(chunk)) !== null) lastT = m;
+      const sRe = /speed=\s*([\d.]+)x/g;
+      while ((m = sRe.exec(chunk)) !== null) lastS = m;
+      if (lastS) {
+        const s = parseFloat(lastS[1]);
+        if (s > 0) lastSpeed = s;
+      }
+      if (lastT && totalDuration > 0) {
+        const secs = parseInt(lastT[1]) * 3600 + parseInt(lastT[2]) * 60 + parseInt(lastT[3]);
+        const pct  = Math.min(99, Math.round((secs / totalDuration) * 100));
+        const etaSec = lastSpeed > 0 ? Math.max(0, Math.round((totalDuration - secs) / lastSpeed)) : null;
+        mainWindow?.webContents.send('podcast-progress', JSON.stringify({
+          status: 'running', pct, etaSec, speed: lastSpeed || null, msg: '',
+        }));
+      }
+    });
+
+    proc.on('error', err => {
+      logEntry({ event: 'podcast-error', error: err.message });
+      resolve({ success: false, error: err.message });
+    });
+
+    proc.on('close', code => {
+      const okMp4 = !wantMp4 || fs.existsSync(mp4Path);
+      const okMp3 = !wantMp3 || fs.existsSync(mp3Path);
+      if (code === 0 && okMp4 && okMp3) {
+        logEntry({ event: 'podcast-done', code, wantMp4, wantMp3 });
+        mainWindow?.webContents.send('podcast-progress', JSON.stringify({ status: 'done', pct: 100, etaSec: 0, speed: null, msg: 'Done!' }));
+        resolve({
+          success:  true,
+          mp4Path:  wantMp4 ? mp4Path : null,
+          mp3Path:  wantMp3 ? mp3Path : null,
+          breaks,
+        });
+      } else {
+        logEntry({ event: 'podcast-failed', code, wantMp4, wantMp3, okMp4, okMp3, stderrTail: stderr.slice(-1200) });
+        mainWindow?.webContents.send('podcast-progress', JSON.stringify({ status: 'error', pct: 0, etaSec: null, speed: null, msg: 'Merge failed' }));
+        resolve({ success: false, error: stderr.slice(-500) });
+      }
+    });
+  });
+});
+
+// ─── Podcast: open separate Time Codes window ─────────────────────────────
+ipcMain.handle('open-timecodes-window', async (_e, payload) => {
+  const breaks = (payload && payload.breaks) || [];
+  const title  = (payload && payload.title)  || 'Time Codes';
+  const tcWin = new BrowserWindow({
+    width: 460, height: 620,
+    minWidth: 380, minHeight: 320,
+    parent: mainWindow,
+    title,
+    backgroundColor: '#0a0820',
+    icon: path.join(__dirname, '..', 'assets', 'icon.ico'),
+    autoHideMenuBar: true,
+    webPreferences: {
+      preload: path.join(__dirname, 'preload.js'),
+      contextIsolation: true,
+      nodeIntegration: false,
+      spellcheck: false,
+    },
+  });
+  tcWin.removeMenu();
+  const hash = encodeURIComponent(JSON.stringify({ breaks, title }));
+  await tcWin.loadFile(path.join(__dirname, 'renderer', 'timecodes.html'), { hash });
+  return { success: true };
+});
+
+ipcMain.handle('clipboard-write', (_e, text) => {
+  try { clipboard.writeText(String(text || '')); return true; } catch { return false; }
 });
 
 // ─── Get recent logs ─────────────────────────────────────────────────────────
@@ -1485,8 +2022,11 @@ ipcMain.handle('check-app-update', () => {
         try {
           const info = JSON.parse(body);
           const latest = info.version || '';
-          const updateAvailable = latest !== APP_VERSION && latest.length > 0;
-          resolve({ currentVersion: APP_VERSION, latestVersion: latest, downloadUrl: info.downloadUrl || '', updateAvailable });
+          // Prefer platform-specific URL; fall back to legacy single `downloadUrl` (Windows-only feed).
+          const platformUrl = IS_MAC ? info.downloadUrl_mac : info.downloadUrl_win;
+          const downloadUrl = platformUrl || info.downloadUrl || '';
+          const updateAvailable = latest !== APP_VERSION && latest.length > 0 && downloadUrl.length > 0;
+          resolve({ currentVersion: APP_VERSION, latestVersion: latest, downloadUrl, updateAvailable });
         } catch {
           resolve({ currentVersion: APP_VERSION, latestVersion: '', downloadUrl: '', updateAvailable: false });
         }
@@ -1497,11 +2037,107 @@ ipcMain.handle('check-app-update', () => {
   });
 });
 
+// Mac update flow: mount DMG, copy new .app over /Applications/RAVdownloader.app,
+// strip quarantine, detach DMG, and relaunch. The running app already has the user's
+// full permissions so xattr/cp/open succeed without Gatekeeper prompts.
+function installMacUpdate(dmgPath) {
+  return new Promise((resolve) => {
+    const mountPoint = path.join(app.getPath('temp'), 'RAVdownloader-update-mount-' + Date.now());
+    const execFile = require('child_process').execFile;
+
+    const cleanupAndQuit = () => {
+      try { execFile('hdiutil', ['detach', mountPoint, '-force'], () => {}); } catch {}
+      try { fs.unlinkSync(dmgPath); } catch {}
+      setTimeout(() => app.quit(), 1200);
+    };
+
+    execFile('hdiutil', ['attach', dmgPath, '-mountpoint', mountPoint, '-nobrowse', '-quiet'], (mountErr) => {
+      if (mountErr) {
+        logEntry({ event: 'mac-update-mount-failed', error: mountErr.message });
+        resolve({ success: false, error: 'Could not mount update DMG: ' + mountErr.message });
+        return;
+      }
+
+      // Find the .app inside the mounted DMG
+      let srcApp = '';
+      try {
+        const entries = fs.readdirSync(mountPoint);
+        const appName = entries.find(n => n.endsWith('.app'));
+        if (appName) srcApp = path.join(mountPoint, appName);
+      } catch {}
+
+      if (!srcApp || !fs.existsSync(srcApp)) {
+        try { execFile('hdiutil', ['detach', mountPoint, '-force'], () => {}); } catch {}
+        try { fs.unlinkSync(dmgPath); } catch {}
+        resolve({ success: false, error: 'No .app found inside update DMG' });
+        return;
+      }
+
+      // Target: replace the currently-running app bundle in /Applications
+      // app.getPath('exe') → .../RAVdownloader.app/Contents/MacOS/RAVdownloader
+      const exePath = app.getPath('exe');
+      const appBundle = exePath.split('/Contents/MacOS/')[0];
+
+      // Use a shell script so cp + xattr + open run sequentially after the parent quits.
+      // Running the script via `nohup ... &` detaches it so quitting the app doesn't kill it.
+      const script = [
+        '#!/bin/bash',
+        'sleep 2',
+        `rm -rf "${appBundle}.old" 2>/dev/null`,
+        `mv "${appBundle}" "${appBundle}.old" 2>/dev/null`,
+        `cp -R "${srcApp}" "${appBundle}"`,
+        `xattr -cr "${appBundle}"`,
+        `hdiutil detach "${mountPoint}" -force 2>/dev/null`,
+        `rm -rf "${appBundle}.old" 2>/dev/null`,
+        `rm -f "${dmgPath}" 2>/dev/null`,
+        `open "${appBundle}"`,
+      ].join('\n');
+
+      const scriptPath = path.join(app.getPath('temp'), 'RAVdownloader-install-' + Date.now() + '.sh');
+      try {
+        fs.writeFileSync(scriptPath, script);
+        fs.chmodSync(scriptPath, 0o755);
+      } catch (err) {
+        cleanupAndQuit();
+        resolve({ success: false, error: 'Could not write installer script: ' + err.message });
+        return;
+      }
+
+      logEntry({ event: 'mac-update-installing', appBundle, srcApp });
+
+      // Detach the installer script so it survives our quit
+      app.once('quit', () => {
+        try {
+          spawn('/bin/bash', [scriptPath], { detached: true, stdio: 'ignore' }).unref();
+        } catch (err) {
+          logEntry({ event: 'mac-update-spawn-failed', error: err.message });
+        }
+      });
+
+      resolve({ success: true, installing: true });
+      setTimeout(() => app.quit(), 1500);
+    });
+  });
+}
+
+// Windows update flow: download .exe, run NSIS silent install, quit so the installer can replace files.
+function installWinUpdate(exePath) {
+  app.once('quit', () => {
+    try {
+      spawn(exePath, ['/S'], { detached: true, stdio: 'ignore', shell: true }).unref();
+    } catch {
+      try { require('child_process').exec(`start "" "${exePath}"`); } catch {}
+    }
+  });
+  setTimeout(() => app.quit(), 1500);
+}
+
 ipcMain.handle('download-app-update', (_e, downloadUrl) => {
   return new Promise((resolve) => {
     if (!downloadUrl) { resolve({ success: false, error: 'No download URL provided' }); return; }
 
-    const tmpPath = path.join(app.getPath('temp'), 'RAVdownloader-update.exe');
+    const tmpName = IS_MAC ? 'RAVdownloader-update.dmg' : 'RAVdownloader-update.exe';
+    const tmpPath = path.join(app.getPath('temp'), tmpName);
     const send = pct => mainWindow?.webContents.send('app-update-progress', pct);
 
     let fileStream;
@@ -1524,18 +2160,16 @@ ipcMain.handle('download-app-update', (_e, downloadUrl) => {
         });
         res.pipe(fileStream);
         fileStream.on('finish', () => {
-          fileStream.close(() => {
+          fileStream.close(async () => {
             send(100);
             logEntry({ event: 'app-update-downloaded', tmpPath });
-            app.once('quit', () => {
-              try {
-                spawn(tmpPath, ['/S'], { detached: true, stdio: 'ignore', shell: true }).unref();
-              } catch {
-                try { require('child_process').exec(`start "" "${tmpPath}"`); } catch {}
-              }
-            });
-            resolve({ success: true, installing: true });
-            setTimeout(() => app.quit(), 1500);
+            if (IS_MAC) {
+              const macResult = await installMacUpdate(tmpPath);
+              resolve(macResult);
+            } else {
+              installWinUpdate(tmpPath);
+              resolve({ success: true, installing: true });
+            }
           });
         });
       }).on('error', err => {
@@ -1563,8 +2197,12 @@ ipcMain.handle('submit-report', (_e, { failedUrl, description }) => {
       }
     } catch {}
 
+    let userName = '';
+    try { userName = readStore().userName || ''; } catch {}
+
     const payload = JSON.stringify({
       appVersion: APP_VERSION,
+      userName,
       failedUrl: failedUrl || '',
       description: description || '',
       logs: recentLogs,
@@ -1622,18 +2260,18 @@ ipcMain.handle('get-diagnostics', async () => {
 
   // Also list all candidate paths tried
   const candidates = isDev ? [
-    path.join(__dirname, '..', 'bin'),
-    path.join(__dirname, 'bin'),
-    path.join(process.cwd(), 'bin'),
-    path.join(app.getAppPath(), 'bin'),
+    path.join(__dirname, '..', DEV_BIN_FOLDER),
+    path.join(__dirname, DEV_BIN_FOLDER),
+    path.join(process.cwd(), DEV_BIN_FOLDER),
+    path.join(app.getAppPath(), DEV_BIN_FOLDER),
   ] : [
     path.join(process.resourcesPath, 'bin'),
   ];
 
   const candidateInfo = candidates.map(c => ({
     path: c,
-    hasYtdlp: fs.existsSync(path.join(c, 'yt-dlp.exe')),
-    hasFfmpeg: fs.existsSync(path.join(c, 'ffmpeg.exe')),
+    hasYtdlp: fs.existsSync(path.join(c, YTDLP_NAME)),
+    hasFfmpeg: fs.existsSync(path.join(c, FFMPEG_NAME)),
   }));
 
   const ytdlpSize = ytdlpExists ? fs.statSync(YTDLP).size : 0;
