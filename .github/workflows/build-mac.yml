@@ -29,6 +29,21 @@ jobs:
       - name: Install dependencies
         run: npm install
 
+      - name: Download GENERIC LOWER.mov (hosted on Cloudflare)
+        run: |
+          set -e
+          mkdir -p "LowerThird Files"
+          echo "▶ Fetching GENERIC LOWER.mov"
+          curl -L --fail -o "LowerThird Files/GENERIC LOWER.mov" \
+            "https://dl.colinchristy.cc/GENERIC%20LOWER.mov"
+          # Sanity-check size — bail early if the download was a 404 HTML page
+          SIZE=$(stat -f%z "LowerThird Files/GENERIC LOWER.mov" 2>/dev/null || stat -c%s "LowerThird Files/GENERIC LOWER.mov")
+          echo "  Downloaded size: $SIZE bytes"
+          if [ "$SIZE" -lt 1000000 ]; then
+            echo "::error::GENERIC LOWER.mov download is suspiciously small ($SIZE bytes) — check the URL"
+            exit 1
+          fi
+
       - name: Download Mac binaries (yt-dlp, ffmpeg, ffprobe)
         run: |
           set -e

@@ -8,3 +8,24 @@ bin/deno.exe
 bin/*.bak
 bin/*.tmp
 *.log
+
+# Mac build binaries fetched at CI build time, not committed
+bin-mac/
+
+# Large LowerThird source asset hosted on Cloudflare and downloaded by CI.
+# Keep tracked: GENERIC LOWER.png and the font (small).
+LowerThird Files/*.mov
+LowerThird Files/Screenshot*.png
+LowerThird Files/BOLLING*.png
+LowerThird Files/mine.png
+LowerThird Files/yours.png
+LowerThird Files/video snapshot.png
+
+# Generated at CI build time from PNG
+assets/icon.icns
+
+# Local Claude / Wrangler / scratch
+.claude/
+.wrangler/
+REF/
+worker.txt
