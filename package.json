@@ -6,7 +6,7 @@
   "scripts": {
     "start": "electron .",
     "build": "electron-builder --win --x64",
-    "dist:mac": "electron-builder --mac --arm64",
+    "dist:mac": "electron-builder --mac --arm64 --publish never",
     "pack": "electron-builder --dir"
   },
   "build": {
