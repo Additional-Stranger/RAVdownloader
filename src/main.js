@@ -4,18 +4,24 @@ const fs = require('fs');
 const { spawn } = require('child_process');
 const https = require('https');
 const http  = require('http');
+const authClient = require('./auth-client');
 
 // ─── App info ────────────────────────────────────────────────────────────────
-const APP_VERSION = '3.0.2';
-const APP_VERSION_DATE = '6-8-26';
-// URL to a JSON file you host: { "version": "2.1.0", "downloadUrl": "https://..." }
-const APP_UPDATE_URL = 'https://ravdownloader-update.djcolinchristy.workers.dev/';
+// APP_VERSION is read from package.json so the running version can never drift
+// from the installer/build metadata — one source of truth, one bump per release.
+const APP_VERSION = app.getVersion();
+const APP_VERSION_DATE = '8-26-26';
+// Update manifest served by our own API (worker editbaytools-api, D1 + R2).
+// Shape: { version, downloadUrl_win, downloadUrl_mac, notes, sha256 }.
+const APP_UPDATE_URL = 'https://api.editbaytools.com/v1/app/latest';
 
 // ─── Platform ────────────────────────────────────────────────────────────────
 const IS_MAC = process.platform === 'darwin';
 const IS_WIN = process.platform === 'win32';
 const EXE_SUFFIX = IS_WIN ? '.exe' : '';
 const YTDLP_NAME   = IS_WIN ? 'yt-dlp.exe'   : 'yt-dlp';
+// User-facing name for the download backend — never surface the vendor name.
+const ENGINE_LABEL = 'Media engine';
 const FFMPEG_NAME  = IS_WIN ? 'ffmpeg.exe'   : 'ffmpeg';
 const FFPROBE_NAME = IS_WIN ? 'ffprobe.exe'  : 'ffprobe';
 
@@ -52,6 +58,51 @@ const BIN_DIR = findBinDir();
 const YTDLP   = path.join(BIN_DIR, YTDLP_NAME);
 const FFMPEG  = path.join(BIN_DIR, FFMPEG_NAME);
 const FFPROBE = path.join(BIN_DIR, FFPROBE_NAME);
+
+// ─── Launching ffmpeg ─────────────────────────────────────────────────────────
+//
+// Every ffmpeg call goes through spawnFF so three things are always true:
+//
+//   -hide_banner   ffmpeg's startup banner is several kilobytes of build flags
+//                  written to stderr on every single run. We never read it, and
+//                  it is pure pressure on a pipe buffer that must not fill.
+//   -nostdin       ffmpeg reads stdin looking for keyboard commands. Our stdin
+//                  is a pipe nobody writes to, and on some inputs ffmpeg will
+//                  block waiting on it. It has no console here, so this is
+//                  never wanted.
+//   -threads N     on macOS only. See below.
+//
+// The thread cap exists because of a real bug report: a Mac user said the
+// machine "sounded like it was about to explode" and then hung. Software H.264
+// encoding will use every core it is given, and on a thin Mac laptop that means
+// the fans hit maximum within seconds and the whole machine becomes sluggish.
+// Leaving two cores free costs a little encode time and makes the app feel like
+// a tool rather than a stress test. Windows machines are typically desktops
+// with the thermal headroom to spare, so they are left to ffmpeg's own default.
+const CPU_COUNT = (() => {
+  try { return require('os').cpus().length || 4; } catch { return 4; }
+})();
+const FF_THREADS = IS_MAC ? Math.max(2, Math.min(8, CPU_COUNT - 2)) : 0;
+
+function ffGlobalArgs() {
+  const a = ['-hide_banner', '-nostdin'];
+  if (FF_THREADS) a.push('-threads', String(FF_THREADS));
+  return a;
+}
+
+/**
+ * Spawns ffmpeg with the global arguments above.
+ *
+ * Also drains stdout unconditionally. ffmpeg normally writes nothing there
+ * because output goes to a file, but an unread pipe that unexpectedly receives
+ * data deadlocks the child once the OS buffer fills, and the failure looks like
+ * the app freezing rather than anything to do with ffmpeg. Draining is free.
+ */
+function spawnFF(args, opts = {}) {
+  const proc = spawn(FFMPEG, [...ffGlobalArgs(), ...args], { windowsHide: true, ...opts });
+  proc.stdout?.resume();
+  return proc;
+}
 
 // ─── Data paths ───────────────────────────────────────────────────────────────
 const USER_DATA  = app.getPath('userData');
@@ -99,11 +150,51 @@ function logEntry(entry) {
   } catch {}
 }
 
+// ─── Taskbar progress ────────────────────────────────────────────────────────
+// Windows: shows a colored progress fill inside the app's taskbar icon (like
+// Adobe Media Encoder) so users can see progress while the window is minimized.
+// mode: 'normal' | 'indeterminate' | 'error' | 'paused' | 'none'
+function setTaskbarProgress(pct, mode = 'normal') {
+  if (!mainWindow || mainWindow.isDestroyed()) return;
+  try {
+    if (mode === 'none') { mainWindow.setProgressBar(-1); return; }
+    if (mode === 'indeterminate') { mainWindow.setProgressBar(2, { mode: 'indeterminate' }); return; }
+    const v = Math.max(0, Math.min(1, (pct || 0) / 100));
+    if (mode === 'error' || mode === 'paused') {
+      mainWindow.setProgressBar(Math.max(v, 0.01), { mode });
+    } else {
+      mainWindow.setProgressBar(v);
+    }
+  } catch {}
+}
+
 // Returns true if the file exists and is larger than 50KB (real binary, not placeholder text file)
 function binaryOk(p) {
   try {
     if (!fs.existsSync(p)) return false;
-    return fs.statSync(p).size > 50000;
+    if (fs.statSync(p).size <= 50000) return false;
+
+    // On macOS and Linux a file can be present, the right size, and still not
+    // runnable. The execute bit does not survive every way a file can travel —
+    // a zip round trip, a copy through some sync tools, a restore from backup —
+    // and when it is missing the failure is an unhelpful EACCES at spawn time
+    // rather than anything that points at permissions. Try to put it back once;
+    // if that is not allowed, report the binary as unusable so the caller shows
+    // a real error instead of appearing to hang.
+    if (!IS_WIN) {
+      try {
+        fs.accessSync(p, fs.constants.X_OK);
+      } catch {
+        try {
+          fs.chmodSync(p, 0o755);
+          fs.accessSync(p, fs.constants.X_OK);
+          logEntry({ event: 'binary-exec-bit-restored', path: p });
+        } catch {
+          return false;
+        }
+      }
+    }
+    return true;
   } catch { return false; }
 }
 
@@ -138,6 +229,96 @@ async function probeVideoSize(filePath) {
   return { width, height };
 }
 
+async function probeHasAudio(filePath) {
+  const { stdout, code } = await runExe(FFPROBE, [
+    '-v', 'quiet',
+    '-select_streams', 'a:0',
+    '-show_entries', 'stream=codec_name',
+    '-of', 'csv=p=0',
+    filePath,
+  ], 15000);
+  return code === 0 && stdout.trim().length > 0;
+}
+
+// Read the EXIF/displaymatrix rotation (degrees) baked into a still image.
+// The multi-branch VO filter chain (split=3) drops ffmpeg's implicit
+// autorotation, so we probe here and re-apply it explicitly with `transpose`.
+// Returns { raw: <number|NaN>, normalized: <0|±90|180> }.
+//   raw        — exactly what ffprobe reported (or NaN if no rotation tag)
+//   normalized — snapped to 90° multiples, but ONLY if raw is within 5° of one.
+//                Malformed displaymatrix fields (seen in some PNGs) report
+//                garbage angles like 135°; ffmpeg itself warns "Odd rotation
+//                angle" and refuses to apply them, and if we snap-and-rotate
+//                those the output ends up flipped even though the source is
+//                fine. When raw is odd we return 0 → no filter prepended.
+async function probeImageRotation(filePath) {
+  const { stdout, code } = await runExe(FFPROBE, [
+    '-v', 'error',
+    '-select_streams', 'v:0',
+    '-show_entries', 'frame_side_data=rotation',
+    '-read_intervals', '%+#1',
+    '-of', 'default=noprint_wrappers=1:nokey=1',
+    filePath,
+  ], 15000);
+  const raw = code === 0 ? parseFloat(String(stdout).trim()) : NaN;
+  if (!Number.isFinite(raw)) return { raw: NaN, normalized: 0 };
+  const rounded = Math.round(raw / 90) * 90;
+  if (Math.abs(raw - rounded) > 5) return { raw, normalized: 0 };
+  const normalized = ((rounded % 360) + 540) % 360 - 180;
+  return { raw, normalized };
+}
+
+// Full diagnostic probe for the VO debug log — captures dimensions, sar, dar,
+// codec, pix_fmt, and *every* frame side-data block (displaymatrix, EXIF, ICC).
+// Nothing here is used to drive the filter chain; it's purely for the log file
+// so we can see why a specific image renders sideways.
+async function probeImageDiagnostics(filePath) {
+  const streamProbe = await runExe(FFPROBE, [
+    '-v', 'error',
+    '-select_streams', 'v:0',
+    '-show_entries', 'stream=width,height,codec_name,pix_fmt,sample_aspect_ratio,display_aspect_ratio',
+    '-of', 'default=noprint_wrappers=1',
+    filePath,
+  ], 15000);
+  const frameProbe = await runExe(FFPROBE, [
+    '-v', 'error',
+    '-select_streams', 'v:0',
+    '-show_frames',
+    '-read_intervals', '%+#1',
+    filePath,
+  ], 15000);
+  return {
+    stream: (streamProbe.stdout || '').trim(),
+    frame:  (frameProbe.stdout  || '').trim(),
+    streamErr: (streamProbe.stderr || '').trim(),
+    frameErr:  (frameProbe.stderr  || '').trim(),
+  };
+}
+
+// Write a human-readable dump of one VO build to logs/vo-debug.log. Meant to be
+// copy-pasted into a bug report. Overwrites (not appends) so the file always
+// reflects the *most recent* build the user actually clicked.
+function writeVoDebugLog(sections) {
+  try {
+    ensureDir(LOG_DIR);
+    const debugPath = path.join(LOG_DIR, 'vo-debug.log');
+    fs.writeFileSync(debugPath, sections.join('\n'));
+    return debugPath;
+  } catch (e) {
+    return null;
+  }
+}
+
+// Filter prefix (empty or ends with ",") that bakes EXIF rotation into pixels
+// before it hits split/scale/overlay — those don't propagate displaymatrix.
+function rotationFilterPrefix(rotationDeg) {
+  const r = ((Math.round(rotationDeg) % 360) + 360) % 360;
+  if (r === 90)  return 'transpose=2,';        // rotation=+90  (Orientation 8)
+  if (r === 180) return 'transpose=1,transpose=1,';
+  if (r === 270) return 'transpose=1,';        // rotation=-90  (Orientation 6)
+  return '';
+}
+
 // ─── FFmpeg filter escape ──────────────────────────────────────────────────
 function escapeFFmpegText(text) {
   // Escape for FFmpeg drawtext text value wrapped in single quotes.
@@ -151,14 +332,37 @@ function escapeFFmpegText(text) {
     .replace(/%/g, '%%');         // % → %% (drawtext expression escape)
 }
 
+// Normalize a user-entered time string ("29", "0:29", ":29", "1:02:03", "45.5")
+// into a plain seconds string that ffmpeg's -ss / -to always accept.
+// Returns null when the value is missing/unparseable so we skip the flag.
+function normalizeFFmpegTime(v) {
+  if (v === null || v === undefined) return null;
+  const s = String(v).trim();
+  if (!s) return null;
+  const parts = s.split(':');
+  let sec;
+  if (parts.length === 3) {
+    sec = (parseFloat(parts[0]) || 0) * 3600 + (parseFloat(parts[1]) || 0) * 60 + (parseFloat(parts[2]) || 0);
+  } else if (parts.length === 2) {
+    sec = (parseFloat(parts[0]) || 0) * 60 + (parseFloat(parts[1]) || 0);
+  } else {
+    sec = parseFloat(s);
+  }
+  if (!Number.isFinite(sec) || sec < 0) return null;
+  return String(sec);
+}
+
 // ─── FFmpeg command builder (Advanced features) ────────────────────────────
-function buildAdvancedFFmpegArgs({ inputPath, outputPath, trim, sourceName, fontPath, videoWidth, videoHeight, blurPillarbox, blurAmount, hardLimiter }) {
+function buildAdvancedFFmpegArgs({ inputPath, outputPath, trim, sourceName, fontPath, videoWidth, videoHeight, blurPillarbox, blurAmount, hardLimiter, addTail, hasAudio }) {
   const args = [];
 
-  // Trim: input-side seek flags (before -i for fast seeking)
+  // Trim: input-side seek flags (before -i for fast seeking).
+  // Values are normalized because raw strings like ":29" are rejected by ffmpeg.
   if (trim) {
-    if (trim.start) args.push('-ss', trim.start);
-    if (trim.end) args.push('-to', trim.end);
+    const startSec = normalizeFFmpegTime(trim.start);
+    const endSec   = normalizeFFmpegTime(trim.end);
+    if (startSec !== null) args.push('-ss', startSec);
+    if (endSec   !== null) args.push('-to', endSec);
   }
 
   args.push('-i', inputPath);
@@ -168,7 +372,7 @@ function buildAdvancedFFmpegArgs({ inputPath, outputPath, trim, sourceName, font
   const needsBlur = blurPillarbox && videoWidth && videoHeight && !is16by9;
   const needsBug = sourceName && sourceName.trim() && fontPath;
 
-  if (needsBlur || needsBug) {
+  if (needsBlur || needsBug || addTail) {
     // Build filter_complex chain
     const filterParts = [];
     let lastLabel;
@@ -185,7 +389,9 @@ function buildAdvancedFFmpegArgs({ inputPath, outputPath, trim, sourceName, font
     }
 
     if (needsBug) {
-      const text = escapeFFmpegText('SOURCE: ' + sourceName.trim().toUpperCase());
+      // Renderer pre-fills the input with "SOURCE: " so the user can edit or
+      // replace it (e.g. type a date instead). Render the raw text as-is.
+      const text = escapeFFmpegText(sourceName.trim().toUpperCase());
       const ffFontPath = fontPath.replace(/\\/g, '/').replace(/:/g, '\\:');
 
       // Blue box + text first (drawtext box=1 creates the blue background)
@@ -200,6 +406,12 @@ function buildAdvancedFFmpegArgs({ inputPath, outputPath, trim, sourceName, font
       lastLabel = 'out';
     }
 
+    if (addTail) {
+      // Freeze the last frame for 1s (audio silence added separately via -af apad).
+      filterParts.push(`[${lastLabel}]tpad=stop_mode=clone:stop_duration=1[withtail]`);
+      lastLabel = 'withtail';
+    }
+
     // Strip the output label from the last filter (FFmpeg uses it as final output)
     const lastIdx = filterParts.length - 1;
     filterParts[lastIdx] = filterParts[lastIdx].replace(/\[[^\]]+\]$/, '');
@@ -210,8 +422,12 @@ function buildAdvancedFFmpegArgs({ inputPath, outputPath, trim, sourceName, font
     args.push('-vf', 'scale=1280:720');
   }
 
-  if (hardLimiter) {
-    args.push('-af', 'alimiter=limit=0.251189:level=0');
+  const audioFilters = [];
+  if (hardLimiter) audioFilters.push('alimiter=limit=0.251189:level=0');
+  // Only pad audio when the source actually has an audio stream.
+  if (addTail && hasAudio) audioFilters.push('apad=pad_dur=1');
+  if (audioFilters.length) {
+    args.push('-af', audioFilters.join(','));
   }
 
   args.push(
@@ -263,7 +479,7 @@ function getActiveCookiesPath() {
 
 // Convert Electron cookies to Netscape cookies.txt format
 function cookiesToNetscape(cookies) {
-  const lines = ['# Netscape HTTP Cookie File', '# This file was generated by RAVdownloader', ''];
+  const lines = ['# Netscape HTTP Cookie File', '# This file was generated by Edit Bay Studio', ''];
   for (const c of cookies) {
     const domain     = c.domain.startsWith('.') ? c.domain : '.' + c.domain;
     const flag       = 'TRUE';
@@ -413,8 +629,8 @@ function buildMacMenu() {
 
 function createWindow() {
   const windowOpts = {
-    width: 1200, height: 820,
-    minWidth: 960, minHeight: 660,
+    width: 1400, height: 980,
+    minWidth: 1020, minHeight: 720,
     transparent: false,
     backgroundColor: '#0a0820',
     show: false,
@@ -440,6 +656,24 @@ function createWindow() {
   mainWindow.loadFile(path.join(__dirname, 'renderer', 'index.html'));
   mainWindow.once('ready-to-show', () => mainWindow.show());
 
+  // Surface renderer problems in the terminal. A thrown error during startup
+  // leaves the window painted in its background colour with no UI, which is
+  // otherwise invisible from the main process.
+  mainWindow.webContents.on('console-message', (_e, level, message, line, sourceId) => {
+    const tag = ['LOG', 'WARN', 'ERROR', 'DEBUG'][level] || 'LOG';
+    if (level >= 2) console.error(`[renderer ${tag}] ${message}  (${sourceId}:${line})`);
+  });
+  mainWindow.webContents.on('did-fail-load', (_e, code, desc, url) => {
+    console.error('[renderer] did-fail-load', code, desc, url);
+  });
+  mainWindow.webContents.on('render-process-gone', (_e, details) => {
+    console.error('[renderer] process gone:', JSON.stringify(details));
+  });
+  mainWindow.webContents.on('preload-error', (_e, preloadPath, error) => {
+    console.error('[renderer] preload error in', preloadPath, error);
+  });
+
+
   // Native right-click context menu for editable fields
   mainWindow.webContents.on('context-menu', (_e, params) => {
     if (params.isEditable) {
@@ -460,8 +694,285 @@ function createWindow() {
   }
 }
 
-app.whenReady().then(createWindow);
+// ─── Accounts and licensing ───────────────────────────────────────────────
+//
+// Nobody reaches the tools without an account and an active plan. The flow:
+//
+//   launch → is there a saved session?
+//              no  → login window
+//              yes → ask the API for a licence → main window
+//                    (the window opens either way; if the plan is not active
+//                     the renderer paints a lock over the tools)
+//
+// The licence is re-checked after every sign-in and once a day just after
+// midnight Eastern, which is what the customer was told would happen. If we
+// cannot reach the server we fall back to the last signed licence until it
+// expires — the server sets that expiry to the offline grace window.
+let loginWindow;
+let cachedUser = null;      // populated after a successful verify or sign-in
+let licenseState = null;    // the last answer, shared with the renderer
+let licenseTimer = null;    // the next scheduled check
+
+const platformString = () => (IS_MAC ? 'mac-arm64' : 'win-x64');
+const SITE_URL = 'https://editbaytools.com';
+
+function createLoginWindow() {
+  if (loginWindow && !loginWindow.isDestroyed()) { loginWindow.focus(); return; }
+  const opts = {
+    width: 460, height: 680, resizable: false, minimizable: true, maximizable: false,
+    backgroundColor: '#0A1220',
+    show: true,             // show immediately, don't wait for ready-to-show
+    center: true,
+    webPreferences: {
+      preload: path.join(__dirname, 'preload.js'),
+      contextIsolation: true,
+      nodeIntegration: false,
+    },
+  };
+  if (IS_MAC) {
+    opts.titleBarStyle = 'hiddenInset';
+    opts.trafficLightPosition = { x: 12, y: 12 };
+  } else {
+    opts.frame = false;
+    opts.icon = path.join(__dirname, '..', 'assets', 'icon.ico');
+  }
+  loginWindow = new BrowserWindow(opts);
+  loginWindow.loadFile(path.join(__dirname, 'renderer', 'login.html'));
+  loginWindow.once('ready-to-show', () => { loginWindow.show(); loginWindow.focus(); });
+  // Fallback: if ready-to-show never fires for some reason, force-show after 2s
+  setTimeout(() => {
+    if (loginWindow && !loginWindow.isDestroyed() && !loginWindow.isVisible()) {
+      loginWindow.show();
+      loginWindow.focus();
+    }
+  }, 2000);
+  loginWindow.webContents.on('did-fail-load', (_e, code, desc, url) => {
+    console.error('Login window failed to load:', code, desc, url);
+  });
+  if (IS_MAC) buildMacMenu(); else Menu.setApplicationMenu(null);
+}
+
+// Development escape hatch: EBS_OPEN_ACCESS=1 skips the gate entirely. It is off
+// by default, so a shipped build always requires a plan.
+const OPEN_ACCESS = process.env.EBS_OPEN_ACCESS === '1';
+
+/** Tells the renderer where it stands, and remembers it for anything that asks later. */
+function publishLicenseState(state) {
+  licenseState = state;
+  try {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('license-state', state);
+    }
+  } catch {}
+}
+
+/**
+ * Runs a licence check and schedules the next one.
+ *
+ * The server tells us when to come back — just after midnight Eastern — so the
+ * schedule stays correct across daylight saving without this side working any
+ * of that out.
+ */
+async function runLicenseCheck({ reason = 'scheduled' } = {}) {
+  if (OPEN_ACCESS) {
+    publishLicenseState({ active: true, openAccess: true, reason: 'open_access' });
+    return licenseState;
+  }
+
+  const r = await authClient.checkLicense({
+    appVersion: APP_VERSION, platform: platformString(),
+  }).catch((e) => ({ ok: false, active: false, reason: 'error', error: e.message }));
+
+  publishLicenseState({ ...r, checkedAt: new Date().toISOString(), checkReason: reason });
+
+  // Signed out on the server, or the seat was taken by another machine. Send
+  // them back to the sign-in window rather than leaving a dead app open.
+  if (r.reason === 'signed_out') {
+    cachedUser = null;
+    try { if (mainWindow && !mainWindow.isDestroyed()) mainWindow.close(); } catch {}
+    createLoginWindow();
+    return r;
+  }
+
+  scheduleNextLicenseCheck(r);
+  return r;
+}
+
+function scheduleNextLicenseCheck(r) {
+  if (licenseTimer) { clearTimeout(licenseTimer); licenseTimer = null; }
+
+  let delay;
+  if (r && r.checkAfter) {
+    delay = new Date(r.checkAfter).getTime() - Date.now();
+  }
+  // Offline, or the server did not say: try again in an hour rather than
+  // waiting a whole day to notice the network came back.
+  if (!Number.isFinite(delay) || delay <= 0) delay = 60 * 60 * 1000;
+
+  // setTimeout overflows past ~24.8 days; nothing here goes that far, but clamp
+  // anyway so a bad date can never turn into an immediate loop.
+  delay = Math.min(delay + 30_000, 25 * 60 * 60 * 1000);
+
+  licenseTimer = setTimeout(() => { runLicenseCheck({ reason: 'daily' }); }, delay);
+}
+
+async function bootstrap() {
+  try {
+    if (OPEN_ACCESS) {
+      console.warn('[license] EBS_OPEN_ACCESS is set — the plan check is switched off');
+      authClient.verifySession()
+        .then(v => { if (v && v.ok && v.user) cachedUser = v.user; })
+        .catch(() => {});
+      publishLicenseState({ active: true, openAccess: true, reason: 'open_access' });
+      createWindow();
+      return;
+    }
+
+    const v = await authClient.verifySession();
+
+    if (v.ok && v.user) {
+      cachedUser = v.user;
+      createWindow();
+      runLicenseCheck({ reason: 'launch' });
+      return;
+    }
+
+    // Offline with a licence still inside its grace window: let them work.
+    if (v.offline) {
+      const cached = authClient.cachedLicense();
+      if (cached && cached.active) {
+        console.warn('[license] offline — running on the cached licence');
+        createWindow();
+        publishLicenseState({ ...cached, ok: true, online: false, checkReason: 'launch_offline' });
+        scheduleNextLicenseCheck(null);
+        return;
+      }
+    }
+
+    createLoginWindow();
+  } catch (err) {
+    console.error('bootstrap failed:', err);
+    dialog.showErrorBox('Edit Bay Studio failed to start',
+      `An error occurred during startup:\n\n${err.message || err}\n\nCheck the terminal for details.`);
+    app.quit();
+  }
+}
+
+process.on('unhandledRejection', (err) => {
+  console.error('Unhandled promise rejection:', err);
+});
+process.on('uncaughtException', (err) => {
+  console.error('Uncaught exception:', err);
+});
+
+app.whenReady().then(bootstrap);
 app.on('window-all-closed', () => app.quit());
+
+// ─── Account IPC ──────────────────────────────────────────────────────────
+ipcMain.handle('auth-signup', async (_e, opts) => {
+  return authClient.signup(opts || {});
+});
+
+ipcMain.handle('auth-login', async (_e, opts) => {
+  const r = await authClient.login({
+    email: opts?.email,
+    password: opts?.password,
+    appVersion: APP_VERSION,
+    platform: platformString(),
+  });
+  if (r.ok && r.user) cachedUser = r.user;
+  return r;
+});
+
+ipcMain.handle('auth-logout', async () => {
+  cachedUser = null;
+  return authClient.logout();
+});
+
+ipcMain.handle('auth-recheck', async () => {
+  const v = await authClient.verifySession();
+  if (v.ok && v.user) cachedUser = v.user;
+  return v;
+});
+
+ipcMain.handle('auth-initial-state', async () => {
+  const v = await authClient.verifySession();
+  if (!v.ok || !v.user) return null;
+  cachedUser = v.user;
+  return { user: v.user, entitlement: v.entitlement || null };
+});
+
+ipcMain.handle('auth-send-email-code', async () => authClient.sendEmailCode());
+ipcMain.handle('auth-verify-email',    async (_e, opts) => authClient.verifyEmail(opts || {}));
+ipcMain.handle('auth-forgot-password', async (_e, opts) => authClient.forgotPassword(opts || {}));
+
+ipcMain.on('auth-enter-app', () => {
+  if (loginWindow && !loginWindow.isDestroyed()) {
+    try { loginWindow.close(); } catch {}
+    loginWindow = null;
+  }
+  createWindow();
+  runLicenseCheck({ reason: 'signed_in' });
+});
+
+ipcMain.on('auth-open-legal', (_e, which) => {
+  const map = {
+    terms: '/legal/terms/', privacy: '/legal/privacy/',
+    refunds: '/legal/refunds/', eula: '/legal/eula/',
+  };
+  shell.openExternal(SITE_URL + (map[which] || '/legal/terms/'));
+});
+
+// ─── Licence IPC ──────────────────────────────────────────────────────────
+// Deliberately does NOT fall back to the cached licence. At launch a check is
+// already in flight, and answering from a stale cache made the lock flash up
+// before the real answer arrived. Null means "not known yet", and the renderer
+// draws nothing until it is told. The offline path publishes the cache itself.
+ipcMain.handle('license-get', async () => licenseState || null);
+ipcMain.handle('license-refresh', async () => runLicenseCheck({ reason: 'manual' }));
+ipcMain.handle('license-open-purchase', async () => {
+  shell.openExternal(`${SITE_URL}/pricing/`);
+  return { ok: true };
+});
+ipcMain.handle('license-open-account', async () => {
+  shell.openExternal(`${SITE_URL}/account/`);
+  return { ok: true };
+});
+
+// Exposed to the main app renderer (window.api) — read current user + sign out
+ipcMain.handle('auth-get-user', async () => {
+  if (cachedUser) return cachedUser;
+  const v = await authClient.verifySession().catch(() => null);
+  if (v && v.ok && v.user) { cachedUser = v.user; return v.user; }
+  return null;
+});
+
+ipcMain.handle('auth-signout-from-app', async () => {
+  cachedUser = null;
+  if (licenseTimer) { clearTimeout(licenseTimer); licenseTimer = null; }
+  licenseState = null;
+  try { await authClient.logout(); } catch {}
+  try { if (mainWindow && !mainWindow.isDestroyed()) mainWindow.close(); } catch {}
+  createLoginWindow();
+  return { ok: true };
+});
+
+ipcMain.handle('auth-change-password', async (_e, opts) => {
+  return authClient.changePassword(opts || {});
+});
+
+
+// If the user has opted in, wipe the persisted UI state (skip queue / advanced
+// toggles / etc.) so the next launch starts with defaults.
+app.on('before-quit', () => {
+  try {
+    const s = readStore();
+    if (s.clearUiOnClose) {
+      delete s.uiState;
+      writeStore(s);
+    }
+  } catch {}
+});
 
 // ─── Window controls ──────────────────────────────────────────────────────────
 ipcMain.on('win-minimize', () => mainWindow?.minimize());
@@ -471,7 +982,7 @@ ipcMain.on('win-close',    () => mainWindow?.close());
 // ─── Settings ─────────────────────────────────────────────────────────────────
 ipcMain.handle('get-settings', () => {
   const s = readStore();
-  if (!s.downloadPath) s.downloadPath = path.join(app.getPath('downloads'), 'RAVdownloader');
+  if (!s.downloadPath) s.downloadPath = path.join(app.getPath('downloads'), 'Edit Bay Studio');
   return s;
 });
 
@@ -512,7 +1023,7 @@ ipcMain.handle('open-log-folder', () => {
 // ─── Get formats (quality picker) ─────────────────────────────────────────────
 ipcMain.handle('get-formats', async (_e, url) => {
   if (!binaryOk(YTDLP)) {
-    return { error: `${YTDLP_NAME} not found.\n\nExpected location:\n${YTDLP}\n\nPlease place ${YTDLP_NAME} in the bin/ folder.` };
+    return { error: `${ENGINE_LABEL} not found.\n\nExpected location:\n${YTDLP}\n\nTry a Soft Update, or reinstall Edit Bay Studio. If it keeps happening, contact Support@editbaytools.com.` };
   }
 
   const fmtArgs = [
@@ -533,7 +1044,7 @@ ipcMain.handle('get-formats', async (_e, url) => {
   const { stdout, stderr, code } = await runExe(YTDLP, fmtArgs, 60000);
 
   if (code !== 0 || !stdout.trim()) {
-    return { error: (stderr || 'yt-dlp returned no data.') + '\n\nCheck the URL and try again.' };
+    return { error: (stderr || 'The media engine returned no data.') + '\n\nCheck the URL and try again.' };
   }
 
   try {
@@ -575,11 +1086,11 @@ ipcMain.handle('get-formats', async (_e, url) => {
 // ─── Start download ───────────────────────────────────────────────────────────
 ipcMain.handle('start-download', async (_e, { id, url, type, formatId, bandwidth, playlistStart, playlistEnd, advanced }) => {
   if (!binaryOk(YTDLP)) {
-    return { success: false, error: `${YTDLP_NAME} not found in bin/ folder.\n\nExpected: ${YTDLP}` };
+    return { success: false, error: `${ENGINE_LABEL} not found.\n\nExpected: ${YTDLP}\n\nTry a Soft Update, or reinstall Edit Bay Studio.` };
   }
 
   const settings = readStore();
-  const dlPath = settings.downloadPath || path.join(app.getPath('downloads'), 'RAVdownloader');
+  const dlPath = settings.downloadPath || path.join(app.getPath('downloads'), 'Edit Bay Studio');
   ensureDir(dlPath);
 
   const args = [];
@@ -597,7 +1108,7 @@ ipcMain.handle('start-download', async (_e, { id, url, type, formatId, bandwidth
     );
   } else {
     if (!binaryOk(FFMPEG)) {
-      return { success: false, error: `${FFMPEG_NAME} not found in bin/ folder.\n\nExpected: ${FFMPEG}` };
+      return { success: false, error: `Media components not found.\n\nExpected: ${FFMPEG}\n\nReinstall Edit Bay Studio, or contact Support@editbaytools.com.` };
     }
     const filenameTemplate = (advanced && advanced.customFilename)
       ? advanced.customFilename + '.%(ext)s'
@@ -647,7 +1158,7 @@ ipcMain.handle('start-download', async (_e, { id, url, type, formatId, bandwidth
         env: { ...process.env, PATH: BIN_DIR + path.delimiter + (process.env.PATH || '') },
       });
     } catch (spawnErr) {
-      resolve({ success: false, error: 'Failed to start yt-dlp: ' + spawnErr.message });
+      resolve({ success: false, error: 'Could not start the media engine: ' + spawnErr.message });
       return;
     }
 
@@ -663,6 +1174,8 @@ ipcMain.handle('start-download', async (_e, { id, url, type, formatId, bandwidth
         logEntry({ event: 'download-stale-timeout', id });
       }
     }, 15000);
+
+    setTaskbarProgress(0, 'indeterminate');
 
     proc.stdout.on('data', d => {
       lastOutputTime = Date.now();
@@ -682,6 +1195,15 @@ ipcMain.handle('start-download', async (_e, { id, url, type, formatId, bandwidth
           else if (extractMatch) mergedFile = extractMatch[1];
           else if (!mergedFile && destMatch && destMatch[1].endsWith('.mp4')) mergedFile = destMatch[1];
           else if (alreadyMatch) mergedFile = alreadyMatch[1];
+
+          // Drive taskbar bar from yt-dlp's own "[download] xx.x%" output.
+          const pctMatch = l.match(/^\[download\]\s+(\d+(?:\.\d+)?)%/);
+          if (pctMatch) {
+            setTaskbarProgress(parseFloat(pctMatch[1]), 'normal');
+          } else if (l.includes('[Merger]') || l.includes('Merging formats')) {
+            setTaskbarProgress(99, 'normal');
+          }
+
           mainWindow?.webContents.send('dl-progress', { id, line: l });
         }
       });
@@ -701,6 +1223,7 @@ ipcMain.handle('start-download', async (_e, { id, url, type, formatId, bandwidth
       clearInterval(staleCheckTimer);
       activeProcs.delete(id);
       logEntry({ event: 'download-spawn-error', id, error: err.message });
+      setTaskbarProgress(0, 'none');
       resolve({ success: false, error: 'Spawn error: ' + err.message });
     });
 
@@ -709,6 +1232,8 @@ ipcMain.handle('start-download', async (_e, { id, url, type, formatId, bandwidth
       activeProcs.delete(id);
       logEntry({ event: 'download-end', id, code, mergedFile, hasAdvanced: !!advanced, stderr: stderrBuf.slice(0, 500) });
       if (code !== 0) {
+        setTaskbarProgress(0, 'error');
+        setTimeout(() => setTaskbarProgress(0, 'none'), 2000);
         resolve({ success: false, error: stderrBuf.slice(-800) || `Process exited with code ${code}` });
         return;
       }
@@ -743,7 +1268,7 @@ ipcMain.handle('start-download', async (_e, { id, url, type, formatId, bandwidth
             const enc = await new Promise((res) => {
               let encProc;
               try {
-                encProc = spawn(FFMPEG, [
+                encProc = spawnFF([
                   '-i', mergedFile,
                   '-c:v', 'libx264', '-preset', 'fast', '-crf', '18',
                   '-c:a', 'aac', '-b:a', '192k',
@@ -818,9 +1343,17 @@ ipcMain.handle('start-download', async (_e, { id, url, type, formatId, bandwidth
 
           const hasBlur = advanced.blurPillarbox;
           const hasLimiter = advanced.hardLimiter;
-          const needsAdvanced = hasTrim || (hasSourceBug && fontPath) || (hasBlur && videoSize) || hasLimiter;
+          const hasTail = !!advanced.addTail;
+          const needsAdvanced = hasTrim || (hasSourceBug && fontPath) || (hasBlur && videoSize) || hasLimiter || hasTail;
           if (needsAdvanced) {
             mainWindow?.webContents.send('dl-progress', { id, line: 'Applying advanced processing (blur pillarbox / trim / source bug)...' });
+
+            // Only probe for audio if tail is requested — apad must be skipped for VO
+            // (no audio stream) or ffmpeg errors out.
+            let hasAudio = false;
+            if (hasTail) {
+              try { hasAudio = await probeHasAudio(mergedFile); } catch {}
+            }
 
             const tmpOut = mergedFile.replace(/\.mp4$/i, '_advanced.mp4');
             const ffmpegArgs = buildAdvancedFFmpegArgs({
@@ -834,6 +1367,8 @@ ipcMain.handle('start-download', async (_e, { id, url, type, formatId, bandwidth
               blurPillarbox: advanced.blurPillarbox || false,
               blurAmount: advanced.blurAmount || 12,
               hardLimiter: advanced.hardLimiter || false,
+              addTail: hasTail,
+              hasAudio,
             });
             logEntry({ event: 'advanced-start', id, file: mergedFile, ffmpegArgs: [FFMPEG, ...ffmpegArgs].join(' ') });
 
@@ -841,7 +1376,7 @@ ipcMain.handle('start-download', async (_e, { id, url, type, formatId, bandwidth
             const advResult = await new Promise((res) => {
               let advProc;
               try {
-                advProc = spawn(FFMPEG, ffmpegArgs, { windowsHide: true });
+                advProc = spawnFF(ffmpegArgs, { windowsHide: true });
               } catch (e) {
                 logEntry({ event: 'advanced-spawn-error', id, error: e.message });
                 res({ success: false });
@@ -901,15 +1436,36 @@ ipcMain.handle('start-download', async (_e, { id, url, type, formatId, bandwidth
         const tmpMp3 = mergedFile.replace(/\.mp3$/i, '_limited.mp3');
         const limResult = await new Promise((res) => {
           let limProc;
+          let settled = false;
+          const done = (v) => { if (!settled) { settled = true; clearTimeout(killTimer); res(v); } };
+          let killTimer;
           try {
-            limProc = spawn(FFMPEG, [
+            limProc = spawnFF([
               '-i', mergedFile,
               '-af', 'alimiter=limit=0.251189:level=0',
               '-c:v', 'copy', '-y', tmpMp3
             ], { windowsHide: true });
-          } catch (e) { res({ success: false }); return; }
-          limProc.on('error', () => res({ success: false }));
-          limProc.on('close', c => res({ success: c === 0 }));
+          } catch (e) { done({ success: false }); return; }
+
+          // This pipe MUST be read. ffmpeg reports progress on stderr the whole
+          // time it runs; if nobody consumes it the OS buffer fills at roughly
+          // 64 KB, the write blocks, and ffmpeg stops dead. 'close' then never
+          // fires and this promise never settles — the app hangs with no error,
+          // which is exactly what a Mac user reported. Reading and discarding
+          // costs nothing and makes the deadlock impossible.
+          limProc.stderr?.resume();
+
+          // Belt and braces: even with the pipe drained, a wedged encode should
+          // not freeze the download forever. Ten minutes is far beyond what a
+          // limiter pass on an audio file can legitimately need.
+          killTimer = setTimeout(() => {
+            try { limProc.kill('SIGKILL'); } catch {}
+            logEntry({ event: 'mp3-limiter-timeout', id });
+            done({ success: false });
+          }, 10 * 60 * 1000);
+
+          limProc.on('error', () => done({ success: false }));
+          limProc.on('close', c => done({ success: c === 0 }));
         });
         if (limResult.success && fs.existsSync(tmpMp3)) {
           fs.unlinkSync(mergedFile);
@@ -920,6 +1476,8 @@ ipcMain.handle('start-download', async (_e, { id, url, type, formatId, bandwidth
         }
       }
 
+      setTaskbarProgress(100, 'normal');
+      setTimeout(() => setTaskbarProgress(0, 'none'), 1500);
       resolve({ success: true });
     });
   });
@@ -933,12 +1491,13 @@ ipcMain.handle('pause-download', (_e, id) => {
     setTimeout(() => { try { proc.kill('SIGKILL'); } catch {} }, 500);
     activeProcs.delete(id);
   }
+  setTaskbarProgress(0, 'none');
   return true;
 });
 
 // ─── yt-dlp version ───────────────────────────────────────────────────────────
 ipcMain.handle('get-ytdlp-version', async () => {
-  if (!binaryOk(YTDLP)) return `${YTDLP_NAME} not found in bin/`;
+  if (!binaryOk(YTDLP)) return `${ENGINE_LABEL} not found`;
   const { stdout, code } = await runExe(YTDLP, ['--version'], 10000);
   return (code === 0 && stdout.trim()) ? stdout.trim() : 'Error reading version';
 });
@@ -955,7 +1514,7 @@ ipcMain.handle('check-ytdlp-update', async () => {
   // Fetch latest nightly tag from GitHub
   return new Promise((resolve) => {
     const apiUrl = 'https://api.github.com/repos/yt-dlp/yt-dlp-nightly-builds/releases/latest';
-    const req = https.get(apiUrl, { headers: { 'User-Agent': 'RAVdownloader/2.0' } }, (res) => {
+    const req = https.get(apiUrl, { headers: { 'User-Agent': 'EditBayStudio/1.0' } }, (res) => {
       let body = '';
       res.on('data', d => body += d);
       res.on('end', () => {
@@ -985,10 +1544,10 @@ ipcMain.handle('update-ytdlp', (_e, useNightly = true) => {
     const repo = useNightly
       ? 'yt-dlp/yt-dlp-nightly-builds'
       : 'yt-dlp/yt-dlp';
-    send(`Fetching latest ${useNightly ? 'nightly' : 'stable'} release from GitHub...`);
+    send('Checking for a new media engine build...');
 
     const apiUrl = `https://api.github.com/repos/${repo}/releases/latest`;
-    const req = https.get(apiUrl, { headers: { 'User-Agent': 'RAVdownloader/2.0' } }, (res) => {
+    const req = https.get(apiUrl, { headers: { 'User-Agent': 'EditBayStudio/1.0' } }, (res) => {
       let body = '';
       res.on('data', d => body += d);
       res.on('end', () => {
@@ -1000,11 +1559,11 @@ ipcMain.handle('update-ytdlp', (_e, useNightly = true) => {
           // Windows: yt-dlp.exe asset. Mac: yt-dlp_macos (universal binary).
           const ytdlpAssetName = IS_WIN ? 'yt-dlp.exe' : 'yt-dlp_macos';
           const asset = (release.assets || []).find(a => a.name === ytdlpAssetName);
-          if (!asset) { resolve({ success: false, error: `${ytdlpAssetName} asset not found in latest release` }); return; }
+          if (!asset) { resolve({ success: false, error: 'No engine build available for this platform right now. Try again later.' }); return; }
           downloadUrl = asset.browser_download_url;
-          send(`Found ${tagName}. Downloading ${ytdlpAssetName}...`);
+          send(`Found build ${tagName}. Downloading...`);
         } catch (err) {
-          resolve({ success: false, error: 'GitHub parse error: ' + err.message });
+          resolve({ success: false, error: 'Could not read the update response: ' + err.message });
           return;
         }
 
@@ -1014,14 +1573,14 @@ ipcMain.handle('update-ytdlp', (_e, useNightly = true) => {
           ensureDir(BIN_DIR);
           fileStream = fs.createWriteStream(tmpPath);
         } catch (err) {
-          resolve({ success: false, error: 'Cannot write to bin folder: ' + err.message });
+          resolve({ success: false, error: 'Could not write the update to disk: ' + err.message });
           return;
         }
 
         const followRedirect = (url, hops) => {
           if (hops > 10) { resolve({ success: false, error: 'Too many redirects' }); return; }
           const mod = url.startsWith('https') ? https : http;
-          mod.get(url, { headers: { 'User-Agent': 'RAVdownloader/2.0' } }, (res2) => {
+          mod.get(url, { headers: { 'User-Agent': 'EditBayStudio/1.0' } }, (res2) => {
             if ([301, 302, 307, 308].includes(res2.statusCode) && res2.headers.location) {
               followRedirect(res2.headers.location, hops + 1);
               return;
@@ -1040,7 +1599,7 @@ ipcMain.handle('update-ytdlp', (_e, useNightly = true) => {
             res2.pipe(fileStream);
             fileStream.on('finish', () => {
               fileStream.close(() => {
-                send('Installing update...');
+                send('Installing soft update...');
                 // Back up then replace — use a timeout to let file handles close on Windows
                 setTimeout(() => {
                   try {
@@ -1056,7 +1615,7 @@ ipcMain.handle('update-ytdlp', (_e, useNightly = true) => {
                     setTimeout(() => {
                       runExe(YTDLP, ['--version'], 10000).then(({ stdout, code }) => {
                         const v = (code === 0 && stdout.trim()) ? stdout.trim() : tagName;
-                        send(`✓ Updated to ${v}`);
+                        send(`\u2713 Soft update complete \u2014 engine ${v}. Edit Bay Studio stayed open.`);
                         resolve({ success: true, version: v });
                       });
                     }, 600);
@@ -1077,14 +1636,14 @@ ipcMain.handle('update-ytdlp', (_e, useNightly = true) => {
       });
     });
     req.on('error', err => resolve({ success: false, error: 'Network error: ' + err.message }));
-    req.setTimeout(15000, () => { req.destroy(); resolve({ success: false, error: 'GitHub request timed out' }); });
+    req.setTimeout(15000, () => { req.destroy(); resolve({ success: false, error: 'The update server did not respond. Check your connection and try again.' }); });
   });
 });
 
 // ─── Supported sites ──────────────────────────────────────────────────────────
 ipcMain.handle('get-supported-sites', async () => {
   if (!binaryOk(YTDLP)) {
-    return { error: `${YTDLP_NAME} not found.\n\nExpected location:\n${YTDLP}` };
+    return { error: `${ENGINE_LABEL} not found.\n\nExpected location:\n${YTDLP}` };
   }
   const { stdout, stderr, code } = await runExe(YTDLP, ['--list-extractors'], 30000);
   if (code !== 0) return { error: stderr || 'Failed to list extractors' };
@@ -1103,16 +1662,28 @@ ipcMain.handle('choose-files', async (_e, { title, filters }) => {
 });
 
 // ─── Convert ─────────────────────────────────────────────────────────────────
-ipcMain.handle('convert-file', (_e, { inputPath, outputFormat, outputDir }) => {
-  return new Promise((resolve) => {
-    if (!binaryOk(FFMPEG)) {
-      resolve({ success: false, error: `${FFMPEG_NAME} not found in bin/ folder.\n\nExpected: ${FFMPEG}` });
-      return;
-    }
-    const base = path.basename(inputPath, path.extname(inputPath));
-    const outPath = path.join(outputDir, `${base}_converted.${outputFormat}`);
-    ensureDir(outputDir);
+ipcMain.handle('convert-file', async (_e, { inputPath, outputFormat, outputDir }) => {
+  if (!binaryOk(FFMPEG)) {
+    return { success: false, error: `Media components not found.\n\nExpected: ${FFMPEG}\n\nReinstall Edit Bay Studio, or contact Support@editbaytools.com.` };
+  }
+  const base = path.basename(inputPath, path.extname(inputPath));
+  const outPath = path.join(outputDir, `${base}_converted.${outputFormat}`);
+  ensureDir(outputDir);
 
+  const isVideoOut = outputFormat === 'mp4';
+
+  // For video conversions, probe duration so the taskbar shows a real %.
+  let sourceDuration = 0;
+  if (isVideoOut && binaryOk(FFPROBE)) {
+    try {
+      const { stdout, code } = await runExe(FFPROBE, [
+        '-v', 'quiet', '-show_entries', 'format=duration', '-of', 'csv=p=0', inputPath,
+      ], 10000);
+      if (code === 0) sourceDuration = parseFloat(stdout.trim()) || 0;
+    } catch {}
+  }
+
+  return new Promise((resolve) => {
     let args;
     if (outputFormat === 'png') {
       args = ['-i', inputPath, '-y', outPath];
@@ -1121,13 +1692,18 @@ ipcMain.handle('convert-file', (_e, { inputPath, outputFormat, outputDir }) => {
       args = ['-i', inputPath, '-q:v', '2', '-pix_fmt', 'yuvj420p', '-y', outPath];
     } else if (outputFormat === 'pdf-png' || outputFormat === 'pdf-jpg') {
       const imgFmt = outputFormat === 'pdf-jpg' ? 'jpg' : 'png';
+      setTaskbarProgress(0, 'indeterminate');
       convertPdfToImage(inputPath, outputDir, base, imgFmt)
         .then(result => {
           logEntry({ event: 'convert', inputPath, outputFormat, code: result.success ? 0 : 1 });
+          setTaskbarProgress(result.success ? 100 : 0, result.success ? 'normal' : 'error');
+          setTimeout(() => setTaskbarProgress(0, 'none'), result.success ? 1200 : 2000);
           resolve(result);
         })
         .catch(err => {
           logEntry({ event: 'convert', inputPath, outputFormat, error: err.message, code: 1 });
+          setTaskbarProgress(0, 'error');
+          setTimeout(() => setTaskbarProgress(0, 'none'), 2000);
           resolve({ success: false, error: err.message });
         });
       return;
@@ -1138,34 +1714,69 @@ ipcMain.handle('convert-file', (_e, { inputPath, outputFormat, outputDir }) => {
          '-pix_fmt', 'yuv420p', '-movflags', '+faststart', '-y', outPath];
     }
 
+    setTaskbarProgress(0, isVideoOut && sourceDuration > 0 ? 'normal' : 'indeterminate');
+
     let proc;
     try {
-      proc = spawn(FFMPEG, args, { windowsHide: true });
+      proc = spawnFF(args, { windowsHide: true });
     } catch (err) {
+      setTaskbarProgress(0, 'none');
       resolve({ success: false, error: err.message });
       return;
     }
     let stderr = '';
-    proc.stderr.on('data', d => stderr += d);
-    proc.on('error', err => resolve({ success: false, error: err.message }));
+    proc.stderr.on('data', d => {
+      const chunk = d.toString();
+      stderr += chunk;
+      if (isVideoOut && sourceDuration > 0) {
+        const timeMatch = chunk.match(/time=(\d+):(\d+):(\d+)\.(\d+)/);
+        if (timeMatch) {
+          const secs = parseInt(timeMatch[1]) * 3600 + parseInt(timeMatch[2]) * 60 + parseInt(timeMatch[3]);
+          const pct = Math.min(99, Math.round((secs / sourceDuration) * 100));
+          setTaskbarProgress(pct, 'normal');
+        }
+      }
+    });
+    proc.on('error', err => {
+      setTaskbarProgress(0, 'none');
+      resolve({ success: false, error: err.message });
+    });
     proc.on('close', code => {
       logEntry({ event: 'convert', inputPath, outPath, code });
-      resolve(code === 0 ? { success: true, outputPath: outPath } : { success: false, error: stderr.slice(-400) });
+      const ok = code === 0;
+      setTaskbarProgress(ok ? 100 : 0, ok ? 'normal' : 'error');
+      setTimeout(() => setTaskbarProgress(0, 'none'), ok ? 1200 : 2000);
+      resolve(ok ? { success: true, outputPath: outPath } : { success: false, error: stderr.slice(-400) });
     });
   });
 });
 
 // ─── Extract audio from video file ───────────────────────────────────────────
-ipcMain.handle('extract-audio', (_e, { inputPath, hardLimiter, trim, customFilename, outputDir }) => {
+ipcMain.handle('extract-audio', async (_e, { inputPath, hardLimiter, trim, customFilename, outputDir }) => {
+  if (!binaryOk(FFMPEG)) return { success: false, error: 'ffmpeg not found' };
+  if (!inputPath || !fs.existsSync(inputPath)) return { success: false, error: 'Input file not found' };
+
+  const baseName = customFilename || path.basename(inputPath, path.extname(inputPath)) + '_audio';
+  const outDir = outputDir || path.dirname(inputPath);
+  ensureDir(outDir);
+  const outPath = path.join(outDir, baseName + '.mp3');
+
+  // Probe duration once so we can drive the taskbar progress bar with a real %.
+  let sourceDuration = 0;
+  if (binaryOk(FFPROBE)) {
+    try {
+      const { stdout, code } = await runExe(FFPROBE, [
+        '-v', 'quiet', '-show_entries', 'format=duration', '-of', 'csv=p=0', inputPath,
+      ], 10000);
+      if (code === 0) sourceDuration = parseFloat(stdout.trim()) || 0;
+    } catch {}
+  }
+  // If the user is trimming, remaining duration = (end || sourceDuration) - (start || 0)
+  const trimStartSec = (trim && trim.start) ? parseTimeStrToSec(trim.start) : 0;
+  const trimEndSec   = (trim && trim.end)   ? parseTimeStrToSec(trim.end)   : sourceDuration;
+  const totalDuration = Math.max(0.01, (trimEndSec || sourceDuration) - trimStartSec);
+
   return new Promise((resolve) => {
-    if (!binaryOk(FFMPEG)) return resolve({ success: false, error: 'ffmpeg not found' });
-    if (!inputPath || !fs.existsSync(inputPath)) return resolve({ success: false, error: 'Input file not found' });
-
-    const baseName = customFilename || path.basename(inputPath, path.extname(inputPath)) + '_audio';
-    const outDir = outputDir || path.dirname(inputPath);
-    ensureDir(outDir);
-    const outPath = path.join(outDir, baseName + '.mp3');
-
     const args = [];
 
     // Trim: input-side seek (before -i for fast seeking)
@@ -1189,11 +1800,13 @@ ipcMain.handle('extract-audio', (_e, { inputPath, hardLimiter, trim, customFilen
 
     logEntry({ event: 'extract-audio-start', inputPath, outPath, hardLimiter, trim });
     mainWindow?.webContents.send('extract-progress', 'Extracting audio...');
+    setTaskbarProgress(0, 'indeterminate');
 
     let proc;
     try {
-      proc = spawn(FFMPEG, args, { windowsHide: true });
+      proc = spawnFF(args, { windowsHide: true });
     } catch (err) {
+      setTaskbarProgress(0, 'none');
       return resolve({ success: false, error: err.message });
     }
 
@@ -1202,14 +1815,20 @@ ipcMain.handle('extract-audio', (_e, { inputPath, hardLimiter, trim, customFilen
       const chunk = d.toString();
       stderr += chunk;
       const line = chunk.trim();
-      if (line.includes('time=') || line.includes('size=')) {
-        const timeMatch = line.match(/time=(\S+)/);
-        mainWindow?.webContents.send('extract-progress', 'Extracting: ' + (timeMatch ? timeMatch[1] : line.slice(-60)));
+      const timeMatch = line.match(/time=(\d+):(\d+):(\d+)\.(\d+)/);
+      if (timeMatch) {
+        const secs = parseInt(timeMatch[1]) * 3600 + parseInt(timeMatch[2]) * 60 + parseInt(timeMatch[3]);
+        const pct = Math.min(99, Math.round((secs / totalDuration) * 100));
+        mainWindow?.webContents.send('extract-progress', `Extracting: ${pct}%`);
+        setTaskbarProgress(pct, 'normal');
+      } else if (line.includes('time=') || line.includes('size=')) {
+        mainWindow?.webContents.send('extract-progress', 'Extracting: ' + line.slice(-60));
       }
     });
 
     proc.on('error', err => {
       logEntry({ event: 'extract-audio-error', error: err.message });
+      setTaskbarProgress(0, 'none');
       resolve({ success: false, error: err.message });
     });
 
@@ -1217,160 +1836,28 @@ ipcMain.handle('extract-audio', (_e, { inputPath, hardLimiter, trim, customFilen
       logEntry({ event: 'extract-audio-done', code, outPath });
       if (code === 0 && fs.existsSync(outPath)) {
         mainWindow?.webContents.send('extract-progress', 'Done!');
+        setTaskbarProgress(100, 'normal');
+        setTimeout(() => setTaskbarProgress(0, 'none'), 1500);
         resolve({ success: true, outputPath: outPath });
       } else {
         mainWindow?.webContents.send('extract-progress', 'Failed');
+        setTaskbarProgress(0, 'error');
+        setTimeout(() => setTaskbarProgress(0, 'none'), 2000);
         resolve({ success: false, error: stderr.slice(-400) });
       }
     });
   });
 });
 
-// ─── Lower Third Generator ──────────────────────────────────────────────────
-function resolveLtDir() {
-  const folderName = 'LowerThird Files';
-  const candidates = isDev ? [
-    path.join(__dirname, '..', folderName),
-    path.join(process.cwd(), folderName),
-    path.join(app.getAppPath(), folderName),
-  ] : [
-    path.join(process.resourcesPath, folderName),
-  ];
-  for (const c of candidates) {
-    if (fs.existsSync(c)) return c;
-  }
-  return null;
+// Parse "HH:MM:SS", "MM:SS", or plain seconds string into a Number.
+function parseTimeStrToSec(str) {
+  if (!str) return 0;
+  const s = String(str).trim();
+  const parts = s.split(':');
+  if (parts.length === 3) return (parseFloat(parts[0]) || 0) * 3600 + (parseFloat(parts[1]) || 0) * 60 + (parseFloat(parts[2]) || 0);
+  if (parts.length === 2) return (parseFloat(parts[0]) || 0) * 60 + (parseFloat(parts[1]) || 0);
+  return parseFloat(s) || 0;
 }
-
-ipcMain.handle('get-lt-files', () => {
-  const ltDir = resolveLtDir();
-  if (!ltDir) return { error: 'LowerThird Files folder not found' };
-
-  const movPath = path.join(ltDir, 'GENERIC LOWER.mov');
-  const pngPath = path.join(ltDir, 'GENERIC LOWER.png');
-  const fontPath = path.join(ltDir, 'ITC Avant Garde Gothic LT Bold.otf');
-
-  const missing = [];
-  if (!fs.existsSync(movPath)) missing.push('GENERIC LOWER.mov');
-  if (!fs.existsSync(pngPath)) missing.push('GENERIC LOWER.png');
-  if (!fs.existsSync(fontPath)) missing.push('ITC Avant Garde Gothic LT Bold.otf');
-
-  if (missing.length) return { error: 'Missing files in LowerThird Files: ' + missing.join(', ') };
-
-  // Return base64 data for renderer (PNG preview + font for canvas)
-  const pngData = fs.readFileSync(pngPath).toString('base64');
-  const fontData = fs.readFileSync(fontPath).toString('base64');
-
-  return {
-    success: true,
-    movPath,
-    pngPath,
-    fontPath,
-    pngBase64: 'data:image/png;base64,' + pngData,
-    fontBase64: 'data:font/opentype;base64,' + fontData,
-  };
-});
-
-ipcMain.handle('generate-lower-third', async (_e, { line1, line2, fontSize1, fontSize2, x1, y1, x2, y2, duration, forceUppercase }) => {
-  if (!binaryOk(FFMPEG)) return { success: false, error: `${FFMPEG_NAME} not found in bin/ folder` };
-
-  const ltDir = resolveLtDir();
-  if (!ltDir) return { success: false, error: 'LowerThird Files folder not found' };
-
-  const movPath = path.join(ltDir, 'GENERIC LOWER.mov');
-  const fontPath = path.join(ltDir, 'ITC Avant Garde Gothic LT Bold.otf');
-
-  if (!fs.existsSync(movPath)) return { success: false, error: 'GENERIC LOWER.mov not found' };
-  if (!fs.existsSync(fontPath)) return { success: false, error: 'Font file not found' };
-
-  // Build default filename from text
-  const safeName = (str) => str.replace(/[^a-zA-Z0-9 _-]/g, '').trim().replace(/\s+/g, '_').slice(0, 40);
-  const defaultName = 'LT_' + safeName(line1 || 'untitled') + (line2 ? '_' + safeName(line2) : '') + '.mov';
-
-  // Show save dialog
-  const result = await dialog.showSaveDialog(mainWindow, {
-    title: 'Save Lower Third',
-    defaultPath: path.join(readStore().downloadPath || app.getPath('downloads'), defaultName),
-    filters: [{ name: 'QuickTime Movie', extensions: ['mov'] }],
-  });
-
-  if (result.canceled || !result.filePath) return { success: false, error: 'Export cancelled' };
-  const outputPath = result.filePath;
-
-  // Calculate loop count: ceil(duration / 8) full loops
-  const loopCount = Math.ceil((duration || 60) / 8);
-  const totalDuration = loopCount * 8;
-  const streamLoops = loopCount - 1;
-
-  // Prepare text
-  const text1 = escapeFFmpegText(forceUppercase ? (line1 || '').toUpperCase() : (line1 || ''));
-  const text2 = escapeFFmpegText(line2 || '');
-  const ffFontPath = fontPath.replace(/\\/g, '/').replace(/:/g, '\\:');
-
-  // Build drawtext filters — positions calibrated from pixel analysis of GENERIC LOWER.png
-  // Dark blue bar: y=813–841, Light bar: y=842–929, text starts at x=262
-  const filters = [];
-  if (text1) {
-    filters.push(`drawtext=fontfile='${ffFontPath}':text='${text1}':fontcolor=black:fontsize=${fontSize1 || 68}:x=${x1 || 363}:y=${y1 || 857}`);
-  }
-  if (text2) {
-    filters.push(`drawtext=fontfile='${ffFontPath}':text='${text2}':fontcolor=black:fontsize=${fontSize2 || 38}:x=${x2 || 363}:y=${y2 || 943}`);
-  }
-
-  const args = [];
-  if (streamLoops > 0) args.push('-stream_loop', String(streamLoops));
-  args.push('-i', movPath);
-
-  if (filters.length) {
-    args.push('-vf', filters.join(','));
-  }
-
-  args.push('-t', String(totalDuration));
-  args.push('-c:v', 'prores_ks', '-profile:v', '4444', '-pix_fmt', 'yuva444p10le');
-  args.push('-an');
-  args.push('-y', outputPath);
-
-  logEntry({ event: 'lt-generate-start', line1, line2, duration: totalDuration, outputPath });
-  mainWindow?.webContents.send('lt-progress', JSON.stringify({ status: 'running', pct: 0, msg: 'Starting export...' }));
-
-  return new Promise((resolve) => {
-    let proc;
-    try {
-      proc = spawn(FFMPEG, args, { windowsHide: true });
-    } catch (err) {
-      return resolve({ success: false, error: err.message });
-    }
-
-    let stderr = '';
-    proc.stderr.on('data', d => {
-      const chunk = d.toString();
-      stderr += chunk;
-      // Parse progress from FFmpeg output
-      const timeMatch = chunk.match(/time=(\d+):(\d+):(\d+)\.(\d+)/);
-      if (timeMatch) {
-        const secs = parseInt(timeMatch[1]) * 3600 + parseInt(timeMatch[2]) * 60 + parseInt(timeMatch[3]);
-        const pct = Math.min(99, Math.round((secs / totalDuration) * 100));
-        mainWindow?.webContents.send('lt-progress', JSON.stringify({ status: 'running', pct, msg: `Encoding: ${pct}%` }));
-      }
-    });
-
-    proc.on('error', err => {
-      logEntry({ event: 'lt-generate-error', error: err.message });
-      resolve({ success: false, error: err.message });
-    });
-
-    proc.on('close', code => {
-      logEntry({ event: 'lt-generate-done', code, outputPath });
-      if (code === 0 && fs.existsSync(outputPath)) {
-        mainWindow?.webContents.send('lt-progress', JSON.stringify({ status: 'done', pct: 100, msg: 'Export complete!' }));
-        resolve({ success: true, outputPath, actualDuration: totalDuration });
-      } else {
-        mainWindow?.webContents.send('lt-progress', JSON.stringify({ status: 'error', pct: 0, msg: 'Export failed' }));
-        resolve({ success: false, error: stderr.slice(-400) });
-      }
-    });
-  });
-});
 
 // ─── Merge Videos ─────────────────────────────────────────────��──────────────
 
@@ -1457,6 +1944,7 @@ ipcMain.handle('merge-videos', async (_e, { files, hardLimiter, crossDissolve, d
 
   logEntry({ event: 'merge-start', fileCount: files.length, crossDissolve, dipToWhite, hardLimiter, removeAudio, forceResolution, outputPath });
   mainWindow?.webContents.send('merge-progress', JSON.stringify({ status: 'running', pct: 0, msg: 'Starting merge...' }));
+  setTaskbarProgress(0, 'indeterminate');
 
   return new Promise((resolve) => {
     let args = [];
@@ -1555,7 +2043,7 @@ ipcMain.handle('merge-videos', async (_e, { files, hardLimiter, crossDissolve, d
 
     let proc;
     try {
-      proc = spawn(FFMPEG, args, { windowsHide: true });
+      proc = spawnFF(args, { windowsHide: true });
     } catch (err) {
       return resolve({ success: false, error: err.message });
     }
@@ -1569,11 +2057,13 @@ ipcMain.handle('merge-videos', async (_e, { files, hardLimiter, crossDissolve, d
         const secs = parseInt(timeMatch[1]) * 3600 + parseInt(timeMatch[2]) * 60 + parseInt(timeMatch[3]);
         const pct = totalDuration > 0 ? Math.min(99, Math.round((secs / totalDuration) * 100)) : 0;
         mainWindow?.webContents.send('merge-progress', JSON.stringify({ status: 'running', pct, msg: `Encoding: ${pct}%` }));
+        setTaskbarProgress(pct, 'normal');
       }
     });
 
     proc.on('error', err => {
       logEntry({ event: 'merge-error', error: err.message });
+      setTaskbarProgress(0, 'none');
       resolve({ success: false, error: err.message });
     });
 
@@ -1581,12 +2071,431 @@ ipcMain.handle('merge-videos', async (_e, { files, hardLimiter, crossDissolve, d
       logEntry({ event: 'merge-done', code, outputPath });
       if (code === 0 && fs.existsSync(outputPath)) {
         mainWindow?.webContents.send('merge-progress', JSON.stringify({ status: 'done', pct: 100, msg: 'Merge complete!' }));
+        setTaskbarProgress(100, 'normal');
+        setTimeout(() => setTaskbarProgress(0, 'none'), 1500);
         resolve({ success: true, outputPath });
       } else {
         mainWindow?.webContents.send('merge-progress', JSON.stringify({ status: 'error', pct: 0, msg: 'Merge failed' }));
+        setTaskbarProgress(0, 'error');
+        setTimeout(() => setTaskbarProgress(0, 'none'), 2000);
         resolve({ success: false, error: stderr.slice(-400) });
       }
     });
+  });
+});
+
+// ─── VO Maker: pictures → 720p slideshow with Ken Burns + crossfade ─────────
+ipcMain.handle('make-vo', async (_e, { files, voName, outputDir, keyframes }) => {
+  if (!binaryOk(FFMPEG)) return { success: false, error: `${FFMPEG_NAME} not found in bin/ folder` };
+  if (!files || files.length < 1) return { success: false, error: 'Add at least 1 picture' };
+
+  for (const f of files) {
+    if (!fs.existsSync(f)) return { success: false, error: 'File not found: ' + f };
+  }
+
+  const cleanName = String(voName || '').replace(/[\\/:*?"<>|]/g, '').trim() || ('VO_' + Date.now());
+
+  const result = await dialog.showSaveDialog(mainWindow, {
+    title: 'Save VO Video',
+    defaultPath: path.join(outputDir || readStore().downloadPath || app.getPath('downloads'), cleanName + '.mp4'),
+    filters: [{ name: 'MP4 Video', extensions: ['mp4'] }],
+  });
+  if (result.canceled || !result.filePath) return { success: false, error: 'VO cancelled' };
+  const outputPath = result.filePath;
+
+  // AVIF / HEIC / HEIF are AV1-or-HEVC-in-ISO-BMFF, so ffmpeg picks the `mov`
+  // demuxer for them and rejects our still-image `-loop 1` flag ("Option loop
+  // not found"). Pre-decode those to PNG in a temp folder so every input flows
+  // through the same image2-based still-image loop below.
+  const PRETRANSCODE_EXTS = new Set(['avif', 'heic', 'heif']);
+  const preDir = path.join(app.getPath('temp'), 'EditBayStudio-vo-pretranscode');
+  try { ensureDir(preDir); }
+  catch (e) { return { success: false, error: 'Could not create pre-decode temp folder: ' + e.message }; }
+
+  const encodedFiles = [];
+  const preSubstitutions = []; // { from, to } for debug log
+  for (const f of files) {
+    const ext = path.extname(f).toLowerCase().slice(1);
+    if (!PRETRANSCODE_EXTS.has(ext)) { encodedFiles.push(f); continue; }
+    const stem = path.basename(f, path.extname(f)).replace(/[^\w.\-]/g, '_').slice(0, 60);
+    const tmpPng = path.join(preDir, `${stem}-${Date.now()}-${Math.floor(Math.random() * 100000)}.png`);
+    const preErr = await new Promise((resolve) => {
+      const proc = spawnFF(['-y', '-i', f, '-frames:v', '1', tmpPng], { windowsHide: true });
+      let stderr = '';
+      proc.stderr.on('data', d => stderr += d.toString());
+      proc.on('error', err => resolve(err.message));
+      proc.on('close', code => resolve(code === 0 ? '' : (stderr.slice(-400) || `ffmpeg exit ${code}`)));
+    });
+    if (preErr || !fs.existsSync(tmpPng)) {
+      return { success: false, error: `Could not pre-decode ${path.basename(f)}: ${preErr || 'no output produced'}` };
+    }
+    encodedFiles.push(tmpPng);
+    preSubstitutions.push({ from: f, to: tmpPng });
+  }
+
+  const PER_DURATION = 7.5;
+  const TRANS_DURATION = 0.5;
+  const FPS = 30;
+  const W = 1280, H = 720;
+  const TOTAL_FRAMES = Math.round(PER_DURATION * FPS); // 225
+  const ZOOM_AMOUNT = 0.22;
+  const n = encodedFiles.length;
+  const totalDuration = n * PER_DURATION - Math.max(0, n - 1) * TRANS_DURATION;
+
+  const args = [];
+  for (const f of encodedFiles) {
+    // -noautorotate: don't let ffmpeg silently apply the source's displaymatrix
+    // on decode. Some PNGs (seen in the wild) carry a malformed EXIF
+    // displaymatrix that ffprobe interprets as an "odd" angle (135°); with
+    // autorotate on, ffmpeg still tries to honor it and warps the output. We
+    // handle rotation ourselves via the transpose prefix built above, using
+    // only clean 90° multiples.
+    args.push('-noautorotate', '-loop', '1', '-t', String(PER_DURATION), '-framerate', String(FPS), '-i', f);
+  }
+
+  // For zoompan: 4x oversample so the zoom stays smooth (pixel jitter of the
+  // integer-only sampling positions is invisible after downsampling to 720p).
+  const OVERSAMPLE = 4;
+  const UPW = W * OVERSAMPLE;
+  const UPH = H * OVERSAMPLE;
+
+  // Build zoompan expressions for one clip.
+  //   scale s (1..4), centre x/y normalized 0..1 in output 1280×720 space.
+  //   Interpolation is linear over the clip duration when both start+end given;
+  //   otherwise it's a hold on the start frame.
+  //   Coordinates map to the oversampled input (iw × ih):
+  //     x_topleft = iw * cx - (iw / zoom) / 2
+  //     y_topleft = ih * cy - (ih / zoom) / 2
+  const buildZoomExprs = (kf) => {
+    const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, Number(v) || 0));
+    const s0 = clamp(kf.start.scale, 1, 4);
+    const x0 = clamp(kf.start.x, 0, 1);
+    const y0 = clamp(kf.start.y, 0, 1);
+    const hasEnd = !!kf.end;
+    const s1 = hasEnd ? clamp(kf.end.scale, 1, 4) : s0;
+    const x1 = hasEnd ? clamp(kf.end.x, 0, 1) : x0;
+    const y1 = hasEnd ? clamp(kf.end.y, 0, 1) : y0;
+    const denom = TOTAL_FRAMES - 1;
+    const zExpr  = `${s0.toFixed(4)}+(${(s1 - s0).toFixed(4)})*on/${denom}`;
+    const cxExpr = `${x0.toFixed(4)}+(${(x1 - x0).toFixed(4)})*on/${denom}`;
+    const cyExpr = `${y0.toFixed(4)}+(${(y1 - y0).toFixed(4)})*on/${denom}`;
+    return {
+      z: zExpr,
+      x: `iw*(${cxExpr})-(iw/zoom/2)`,
+      y: `ih*(${cyExpr})-(ih/zoom/2)`,
+    };
+  };
+
+  // Probe EXIF/displaymatrix rotation for each still. The split=3 fan-out below
+  // erases ffmpeg's implicit autorotation, so we have to bake it in explicitly
+  // before the chain forks — otherwise phone photos (typically Orientation 6/8)
+  // land sideways in the output while the modal preview looks correct.
+  const rotationInfo = await Promise.all(encodedFiles.map(f => probeImageRotation(f)));
+  const rotations    = rotationInfo.map(r => r.normalized);
+  const diagnostics  = await Promise.all(encodedFiles.map(f => probeImageDiagnostics(f)));
+
+  const filterParts = [];
+  for (let i = 0; i < n; i++) {
+    const kf = (Array.isArray(keyframes) && keyframes[i] && keyframes[i].start) ? keyframes[i] : null;
+
+    let zExpr, xExpr, yExpr;
+    if (kf) {
+      const e = buildZoomExprs(kf);
+      zExpr = e.z; xExpr = e.x; yExpr = e.y;
+    } else {
+      const isZoomIn = (i % 2 === 0); // alternate: even=in, odd=out
+      zExpr = isZoomIn
+        ? `1+${ZOOM_AMOUNT}*on/${TOTAL_FRAMES - 1}`
+        : `${(1 + ZOOM_AMOUNT).toFixed(4)}-${ZOOM_AMOUNT}*on/${TOTAL_FRAMES - 1}`;
+      xExpr = `iw/2-(iw/zoom/2)`;
+      yExpr = `ih/2-(ih/zoom/2)`;
+    }
+
+    const rotPrefix = rotationFilterPrefix(rotations[i]);
+
+    // Background is a cover-fit, gaussian-blurred copy of the same photo (like
+    // Instagram / QuickTime pillarbox). "20% camera blur" ≈ gblur sigma 20.
+    //
+    // For transparent PNGs the fallback color comes from the image's OWN average
+    // color (1×1 downscale then upscale), so nothing looks like a generic gray
+    // or black rectangle — it always feels tied to the picture.
+    filterParts.push(
+      `[${i}:v]${rotPrefix}fps=${FPS},format=rgba,split=3[for_avg${i}][src_bg${i}][src_fg${i}]`
+      // Average color of the source → filled canvas (used ONLY behind transparent alpha regions)
+      + `;[for_avg${i}]scale=1:1:flags=area,scale=${W}:${H}:flags=neighbor,setsar=1,format=yuv420p[avg${i}]`
+      // BG: cover-fit the source (crops overflow), composite onto the avg canvas to flatten any alpha
+      + `;[src_bg${i}]scale=${W}:${H}:force_original_aspect_ratio=increase:flags=lanczos,crop=${W}:${H},setsar=1[bg_cover${i}]`
+      + `;[avg${i}][bg_cover${i}]overlay=0:0:shortest=1:format=auto[bg_flat${i}]`
+      + `;[bg_flat${i}]gblur=sigma=20,format=yuv420p[bgb${i}]`
+      // FG: aspect-preserving fit inside the frame (unchanged behavior)
+      + `;[src_fg${i}]scale=${W}:${H}:force_original_aspect_ratio=decrease:flags=lanczos,setsar=1[fgs${i}]`
+      // Composite, then oversample with lanczos so zoompan's integer sampling stays smooth
+      + `;[bgb${i}][fgs${i}]overlay=(W-w)/2:(H-h)/2:format=auto,format=yuv420p,scale=${UPW}:${UPH}:flags=lanczos`
+      + `,zoompan=z='${zExpr}':d=1:s=${W}x${H}:fps=${FPS}:x='${xExpr}':y='${yExpr}'[v${i}]`
+    );
+  }
+
+  if (n >= 2) {
+    let lastLabel = '[v0]';
+    let offset = PER_DURATION - TRANS_DURATION;
+    for (let i = 1; i < n; i++) {
+      const outLabel = (i === n - 1) ? '[outv]' : `[xf${i}]`;
+      filterParts.push(`${lastLabel}[v${i}]xfade=transition=fade:duration=${TRANS_DURATION}:offset=${offset.toFixed(3)}${outLabel}`);
+      lastLabel = outLabel;
+      offset += PER_DURATION - TRANS_DURATION;
+    }
+  } else {
+    filterParts.push(`[v0]null[outv]`);
+  }
+
+  args.push('-filter_complex', filterParts.join(';'));
+  args.push('-map', '[outv]');
+  // Strip *all* container/stream metadata from the output. If we don't, ffmpeg
+  // copies the source EXIF (including any bogus displaymatrix / rotation tag)
+  // straight into the MP4 and players re-rotate the video on playback — even
+  // though our filter chain produced correctly-oriented pixels.
+  args.push('-map_metadata', '-1');
+  args.push('-c:v', 'libx264', '-preset', 'fast', '-crf', '18', '-pix_fmt', 'yuv420p', '-movflags', '+faststart');
+  args.push('-r', String(FPS));
+  args.push('-an');
+  args.push('-y', outputPath);
+
+  // Build the human-readable debug dump BEFORE spawn so it exists even if
+  // ffmpeg crashes hard. stderr gets appended in the close handler.
+  const debugSections = [];
+  debugSections.push('='.repeat(70));
+  debugSections.push(`VO BUILD  ${new Date().toISOString()}`);
+  debugSections.push(`App: ${APP_VERSION}   ffmpeg: ${FFMPEG}`);
+  debugSections.push(`Output: ${outputPath}`);
+  debugSections.push(`Files: ${n}    Per-clip: ${PER_DURATION}s @ ${FPS}fps    Canvas: ${W}x${H}`);
+  if (preSubstitutions.length) {
+    debugSections.push(`Pre-decoded ${preSubstitutions.length} file(s) (AVIF/HEIC/HEIF → PNG so -loop works):`);
+    for (const s of preSubstitutions) debugSections.push(`  ${s.from}  →  ${s.to}`);
+  }
+  debugSections.push('='.repeat(70));
+  for (let i = 0; i < n; i++) {
+    const kf = (Array.isArray(keyframes) && keyframes[i] && keyframes[i].start) ? keyframes[i] : null;
+    const rawRot = rotationInfo[i].raw;
+    const rot    = rotationInfo[i].normalized;
+    const prefix = rotationFilterPrefix(rot);
+    let rotLine;
+    if (!Number.isFinite(rawRot)) {
+      rotLine = 'none (no rotation side-data)';
+    } else if (rot === 0 && Math.round(rawRot) !== 0) {
+      rotLine = `${rawRot} deg — IGNORED (odd angle, not a 90° multiple; source displaymatrix is likely malformed)`;
+    } else {
+      rotLine = `${rawRot} deg → normalized to ${rot} deg`;
+    }
+    const origPath = files[i];
+    const encPath  = encodedFiles[i];
+    debugSections.push(`\n--- File ${i + 1}/${n} ---`);
+    debugSections.push(`Path: ${encPath}${encPath !== origPath ? '   (pre-decoded from: ' + origPath + ')' : ''}`);
+    debugSections.push(`Detected rotation (ffprobe): ${rotLine}`);
+    debugSections.push(`Applied filter prefix: ${prefix || '(none)'}`);
+    debugSections.push(`Keyframes: ${kf ? JSON.stringify(kf) : '(none — default alternating zoom)'}`);
+    debugSections.push(`--- ffprobe stream ---`);
+    debugSections.push(diagnostics[i].stream || '(empty)');
+    if (diagnostics[i].streamErr) debugSections.push(`(stderr) ${diagnostics[i].streamErr}`);
+    debugSections.push(`--- ffprobe first frame (side data / EXIF / displaymatrix) ---`);
+    debugSections.push(diagnostics[i].frame || '(empty)');
+    if (diagnostics[i].frameErr) debugSections.push(`(stderr) ${diagnostics[i].frameErr}`);
+  }
+  debugSections.push('\n' + '='.repeat(70));
+  debugSections.push('FULL FFMPEG COMMAND');
+  debugSections.push('='.repeat(70));
+  // Quote each arg so users can paste it into a shell for repro.
+  const quotedArgs = args.map(a => /[\s"\\;&|<>()]/.test(a) ? `"${a.replace(/"/g, '\\"')}"` : a);
+  debugSections.push([FFMPEG, ...quotedArgs].join(' '));
+  const debugPath = writeVoDebugLog(debugSections);
+
+  logEntry({ event: 'vo-start', n, outputPath, rotationInfo, debugPath });
+  mainWindow?.webContents.send('vo-progress', JSON.stringify({ status: 'running', pct: 0, msg: 'Starting VO build…' }));
+  setTaskbarProgress(0, 'indeterminate');
+
+  return new Promise((resolve) => {
+    let proc;
+    try {
+      proc = spawnFF(args, { windowsHide: true });
+    } catch (err) {
+      return resolve({ success: false, error: err.message });
+    }
+
+    let stderr = '';
+    proc.stderr.on('data', d => {
+      const chunk = d.toString();
+      stderr += chunk;
+      const timeMatch = chunk.match(/time=(\d+):(\d+):(\d+)\.(\d+)/);
+      if (timeMatch) {
+        const secs = parseInt(timeMatch[1]) * 3600 + parseInt(timeMatch[2]) * 60 + parseInt(timeMatch[3]);
+        const pct = totalDuration > 0 ? Math.min(99, Math.round((secs / totalDuration) * 100)) : 0;
+        mainWindow?.webContents.send('vo-progress', JSON.stringify({ status: 'running', pct, msg: `Encoding: ${pct}%` }));
+        setTaskbarProgress(pct, 'normal');
+      }
+    });
+
+    proc.on('error', err => {
+      logEntry({ event: 'vo-error', error: err.message });
+      setTaskbarProgress(0, 'none');
+      resolve({ success: false, error: err.message });
+    });
+
+    proc.on('close', code => {
+      logEntry({ event: 'vo-done', code, outputPath });
+      // Append ffmpeg stderr to the debug log — this is where actual rotation
+      // errors / filter warnings / autorotate hints will show up.
+      try {
+        if (debugPath) {
+          const tail = [
+            '',
+            '='.repeat(70),
+            `FFMPEG EXIT CODE: ${code}`,
+            '='.repeat(70),
+            'FFMPEG STDERR (full):',
+            stderr,
+            '',
+          ].join('\n');
+          fs.appendFileSync(debugPath, tail);
+        }
+      } catch {}
+      if (code === 0 && fs.existsSync(outputPath)) {
+        mainWindow?.webContents.send('vo-progress', JSON.stringify({ status: 'done', pct: 100, msg: 'VO complete!', debugPath }));
+        setTaskbarProgress(100, 'normal');
+        setTimeout(() => setTaskbarProgress(0, 'none'), 1500);
+        resolve({ success: true, outputPath, debugPath });
+      } else {
+        mainWindow?.webContents.send('vo-progress', JSON.stringify({ status: 'error', pct: 0, msg: 'VO build failed', debugPath }));
+        setTaskbarProgress(0, 'error');
+        setTimeout(() => setTaskbarProgress(0, 'none'), 2000);
+        resolve({ success: false, error: stderr.slice(-500), debugPath });
+      }
+    });
+  });
+});
+
+// Reveal the last VO debug log (or, if it doesn't exist, the logs folder).
+ipcMain.handle('open-vo-debug-log', async () => {
+  try {
+    const debugPath = path.join(LOG_DIR, 'vo-debug.log');
+    if (fs.existsSync(debugPath)) {
+      shell.showItemInFolder(debugPath);
+      return { success: true, path: debugPath };
+    }
+    ensureDir(LOG_DIR);
+    shell.openPath(LOG_DIR);
+    return { success: true, path: LOG_DIR, message: 'No VO build yet — opened logs folder' };
+  } catch (e) {
+    return { success: false, error: e.message };
+  }
+});
+
+// Download an image URL to a temp file so the renderer can hand it to VO Maker
+// as if it were a normal local file. Used by the VO drag-and-drop handler when
+// the user drops an image straight from a browser (e.g. Google Images), which
+// gives us a URL instead of a real file path.
+ipcMain.handle('download-image-url', async (_e, url) => {
+  const MAX_BYTES = 25 * 1024 * 1024;
+  const MAX_REDIRECTS = 5;
+  const TIMEOUT_MS = 15000;
+  const ACCEPTED_EXTS = new Set(['jpg','jpeg','png','webp','avif','bmp','tif','tiff']);
+
+  const extFromContentType = (ct) => {
+    if (!ct) return '';
+    const c = ct.toLowerCase().split(';')[0].trim();
+    if (c === 'image/jpeg' || c === 'image/jpg') return 'jpg';
+    if (c === 'image/png')                       return 'png';
+    if (c === 'image/webp')                      return 'webp';
+    if (c === 'image/avif')                      return 'avif';
+    if (c === 'image/bmp' || c === 'image/x-ms-bmp') return 'bmp';
+    if (c === 'image/tiff')                      return 'tiff';
+    return '';
+  };
+  const extFromUrl = (u) => {
+    try {
+      const m = new URL(u).pathname.toLowerCase().match(/\.([a-z0-9]+)$/);
+      if (!m) return '';
+      const ext = m[1] === 'jpe' ? 'jpg' : m[1];
+      return ACCEPTED_EXTS.has(ext) ? ext : '';
+    } catch { return ''; }
+  };
+
+  const dropDir = path.join(app.getPath('temp'), 'EditBayStudio-vo-drops');
+  try { ensureDir(dropDir); }
+  catch (e) { return { success: false, error: 'Could not create temp folder: ' + e.message }; }
+
+  return new Promise((resolve) => {
+    let redirects = 0;
+
+    const doRequest = (currentUrl) => {
+      let parsed;
+      try { parsed = new URL(currentUrl); }
+      catch { return resolve({ success: false, error: 'Invalid URL' }); }
+      if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+        return resolve({ success: false, error: 'Only http(s) URLs are supported' });
+      }
+      const lib = parsed.protocol === 'https:' ? https : http;
+      const req = lib.get(currentUrl, {
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0 Safari/537.36',
+          'Accept': 'image/*,*/*;q=0.8',
+        },
+      }, (res) => {
+        if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
+          res.resume();
+          if (++redirects > MAX_REDIRECTS) return resolve({ success: false, error: 'Too many redirects' });
+          try { return doRequest(new URL(res.headers.location, currentUrl).toString()); }
+          catch { return resolve({ success: false, error: 'Bad redirect location' }); }
+        }
+        if (res.statusCode !== 200) {
+          res.resume();
+          return resolve({ success: false, error: 'HTTP ' + res.statusCode });
+        }
+
+        const ext = extFromContentType(res.headers['content-type']) || extFromUrl(currentUrl);
+        if (!ext) {
+          res.resume();
+          return resolve({ success: false, error: 'Unsupported image type (' + (res.headers['content-type'] || 'unknown') + ')' });
+        }
+
+        const contentLength = parseInt(res.headers['content-length'] || '0', 10);
+        if (contentLength && contentLength > MAX_BYTES) {
+          res.resume();
+          return resolve({ success: false, error: 'Image too large (' + Math.round(contentLength / 1024 / 1024) + ' MB, limit 25 MB)' });
+        }
+
+        const filename = 'vo-drop-' + Date.now() + '-' + Math.floor(Math.random() * 100000) + '.' + ext;
+        const outPath = path.join(dropDir, filename);
+        const ws = fs.createWriteStream(outPath);
+        let written = 0;
+        let aborted = false;
+        const abort = (err) => {
+          if (aborted) return;
+          aborted = true;
+          try { res.destroy(); } catch {}
+          try { ws.destroy(); } catch {}
+          try { fs.unlinkSync(outPath); } catch {}
+          resolve({ success: false, error: err });
+        };
+
+        res.on('data', (chunk) => {
+          written += chunk.length;
+          if (written > MAX_BYTES) abort('Image exceeded 25 MB during download');
+        });
+        res.on('error', (err) => abort(err.message));
+        ws.on('error', (err) => abort('Write failed: ' + err.message));
+        ws.on('finish', () => {
+          if (!aborted) resolve({ success: true, path: outPath, name: filename });
+        });
+        res.pipe(ws);
+      });
+
+      req.on('error', (err) => resolve({ success: false, error: err.message }));
+      req.setTimeout(TIMEOUT_MS, () => {
+        req.destroy();
+        resolve({ success: false, error: 'Request timed out' });
+      });
+    };
+
+    doRequest(url);
   });
 });
 
@@ -1732,11 +2641,12 @@ ipcMain.handle('merge-podcast', async (_e, { files, hardLimiter, filename, outpu
   mainWindow?.webContents.send('podcast-progress', JSON.stringify({
     status: 'running', pct: 0, etaSec: null, speed: null, msg: 'Encoding…',
   }));
+  setTaskbarProgress(0, 'indeterminate');
 
   return new Promise((resolve) => {
     let proc;
     try {
-      proc = spawn(FFMPEG, args, { windowsHide: true });
+      proc = spawnFF(args, { windowsHide: true });
     } catch (err) {
       return resolve({ success: false, error: err.message });
     }
@@ -1763,11 +2673,13 @@ ipcMain.handle('merge-podcast', async (_e, { files, hardLimiter, filename, outpu
         mainWindow?.webContents.send('podcast-progress', JSON.stringify({
           status: 'running', pct, etaSec, speed: lastSpeed || null, msg: '',
         }));
+        setTaskbarProgress(pct, 'normal');
       }
     });
 
     proc.on('error', err => {
       logEntry({ event: 'podcast-error', error: err.message });
+      setTaskbarProgress(0, 'none');
       resolve({ success: false, error: err.message });
     });
 
@@ -1777,6 +2689,8 @@ ipcMain.handle('merge-podcast', async (_e, { files, hardLimiter, filename, outpu
       if (code === 0 && okMp4 && okMp3) {
         logEntry({ event: 'podcast-done', code, wantMp4, wantMp3 });
         mainWindow?.webContents.send('podcast-progress', JSON.stringify({ status: 'done', pct: 100, etaSec: 0, speed: null, msg: 'Done!' }));
+        setTaskbarProgress(100, 'normal');
+        setTimeout(() => setTaskbarProgress(0, 'none'), 1500);
         resolve({
           success:  true,
           mp4Path:  wantMp4 ? mp4Path : null,
@@ -1786,6 +2700,8 @@ ipcMain.handle('merge-podcast', async (_e, { files, hardLimiter, filename, outpu
       } else {
         logEntry({ event: 'podcast-failed', code, wantMp4, wantMp3, okMp4, okMp3, stderrTail: stderr.slice(-1200) });
         mainWindow?.webContents.send('podcast-progress', JSON.stringify({ status: 'error', pct: 0, etaSec: null, speed: null, msg: 'Merge failed' }));
+        setTaskbarProgress(0, 'error');
+        setTimeout(() => setTaskbarProgress(0, 'none'), 2000);
         resolve({ success: false, error: stderr.slice(-500) });
       }
     });
@@ -2013,9 +2929,24 @@ ipcMain.handle('get-app-version', () => {
   return { version: APP_VERSION, date: APP_VERSION_DATE };
 });
 
+// Numeric semver compare: returns 1 if a > b, -1 if a < b, 0 if equal.
+// Guards the update popup from firing when the remote worker is behind the
+// running client (which would otherwise prompt a phantom "downgrade").
+function compareSemver(a, b) {
+  const pa = String(a).split('.').map(n => parseInt(n, 10) || 0);
+  const pb = String(b).split('.').map(n => parseInt(n, 10) || 0);
+  const len = Math.max(pa.length, pb.length);
+  for (let i = 0; i < len; i++) {
+    const x = pa[i] || 0, y = pb[i] || 0;
+    if (x > y) return 1;
+    if (x < y) return -1;
+  }
+  return 0;
+}
+
 ipcMain.handle('check-app-update', () => {
   return new Promise((resolve) => {
-    const req = https.get(APP_UPDATE_URL, { headers: { 'User-Agent': 'RAVdownloader/' + APP_VERSION } }, (res) => {
+    const req = https.get(APP_UPDATE_URL, { headers: { 'User-Agent': 'EditBayStudio/' + APP_VERSION } }, (res) => {
       let body = '';
       res.on('data', d => body += d);
       res.on('end', () => {
@@ -2025,7 +2956,7 @@ ipcMain.handle('check-app-update', () => {
           // Prefer platform-specific URL; fall back to legacy single `downloadUrl` (Windows-only feed).
           const platformUrl = IS_MAC ? info.downloadUrl_mac : info.downloadUrl_win;
           const downloadUrl = platformUrl || info.downloadUrl || '';
-          const updateAvailable = latest !== APP_VERSION && latest.length > 0 && downloadUrl.length > 0;
+          const updateAvailable = latest.length > 0 && downloadUrl.length > 0 && compareSemver(latest, APP_VERSION) > 0;
           resolve({ currentVersion: APP_VERSION, latestVersion: latest, downloadUrl, updateAvailable });
         } catch {
           resolve({ currentVersion: APP_VERSION, latestVersion: '', downloadUrl: '', updateAvailable: false });
@@ -2037,12 +2968,12 @@ ipcMain.handle('check-app-update', () => {
   });
 });
 
-// Mac update flow: mount DMG, copy new .app over /Applications/RAVdownloader.app,
+// Mac update flow: mount DMG, copy new .app over /Applications/Edit Bay Studio.app,
 // strip quarantine, detach DMG, and relaunch. The running app already has the user's
 // full permissions so xattr/cp/open succeed without Gatekeeper prompts.
 function installMacUpdate(dmgPath) {
   return new Promise((resolve) => {
-    const mountPoint = path.join(app.getPath('temp'), 'RAVdownloader-update-mount-' + Date.now());
+    const mountPoint = path.join(app.getPath('temp'), 'EditBayStudio-update-mount-' + Date.now());
     const execFile = require('child_process').execFile;
 
     const cleanupAndQuit = () => {
@@ -2074,7 +3005,7 @@ function installMacUpdate(dmgPath) {
       }
 
       // Target: replace the currently-running app bundle in /Applications
-      // app.getPath('exe') → .../RAVdownloader.app/Contents/MacOS/RAVdownloader
+      // app.getPath('exe') → .../Edit Bay Studio.app/Contents/MacOS/Edit Bay Studio
       const exePath = app.getPath('exe');
       const appBundle = exePath.split('/Contents/MacOS/')[0];
 
@@ -2093,7 +3024,7 @@ function installMacUpdate(dmgPath) {
         `open "${appBundle}"`,
       ].join('\n');
 
-      const scriptPath = path.join(app.getPath('temp'), 'RAVdownloader-install-' + Date.now() + '.sh');
+      const scriptPath = path.join(app.getPath('temp'), 'EditBayStudio-install-' + Date.now() + '.sh');
       try {
         fs.writeFileSync(scriptPath, script);
         fs.chmodSync(scriptPath, 0o755);
@@ -2136,7 +3067,7 @@ ipcMain.handle('download-app-update', (_e, downloadUrl) => {
   return new Promise((resolve) => {
     if (!downloadUrl) { resolve({ success: false, error: 'No download URL provided' }); return; }
 
-    const tmpName = IS_MAC ? 'RAVdownloader-update.dmg' : 'RAVdownloader-update.exe';
+    const tmpName = IS_MAC ? 'EditBayStudio-update.dmg' : 'EditBayStudio-update.exe';
     const tmpPath = path.join(app.getPath('temp'), tmpName);
     const send = pct => mainWindow?.webContents.send('app-update-progress', pct);
 
@@ -2147,7 +3078,7 @@ ipcMain.handle('download-app-update', (_e, downloadUrl) => {
     const followRedirect = (url, hops) => {
       if (hops > 10) { resolve({ success: false, error: 'Too many redirects' }); return; }
       const mod = url.startsWith('https') ? https : http;
-      mod.get(url, { headers: { 'User-Agent': 'RAVdownloader/' + APP_VERSION } }, (res) => {
+      mod.get(url, { headers: { 'User-Agent': 'EditBayStudio/' + APP_VERSION } }, (res) => {
         if ([301, 302, 307, 308].includes(res.statusCode) && res.headers.location) {
           followRedirect(res.headers.location, hops + 1);
           return;
@@ -2181,10 +3112,16 @@ ipcMain.handle('download-app-update', (_e, downloadUrl) => {
   });
 });
 
-// ─── Report Issue (sends to worker endpoint) ────────────────────────────────
-const REPORT_URL = 'https://ravdownloader-update.djcolinchristy.workers.dev/report';
+// ─── Report Issue ───────────────────────────────────────────────────────────
+//
+// Goes to our own API. This previously posted to a RAVdownloader worker on a
+// personal domain, which meant Edit Bay Studio customers' names and logs were
+// sent to infrastructure belonging to a different product — and to a third
+// party the Privacy Policy never named. Reports now land somewhere that policy
+// actually covers.
+const REPORT_URL = `${authClient.API_URL}/v1/report`;
 
-ipcMain.handle('submit-report', (_e, { failedUrl, description }) => {
+ipcMain.handle('submit-report', (_e, { failedUrl, description, attachVoDebugLog }) => {
   return new Promise((resolve) => {
     // Gather recent log lines
     let recentLogs = '';
@@ -2197,17 +3134,32 @@ ipcMain.handle('submit-report', (_e, { failedUrl, description }) => {
       }
     } catch {}
 
-    let userName = '';
-    try { userName = readStore().userName || ''; } catch {}
+    // When a VO build fails we want the ENTIRE vo-debug.log — the daily log's
+    // last 50 lines don't include the full ffmpeg command or the stderr tail.
+    let voDebugLog = '';
+    if (attachVoDebugLog) {
+      try {
+        const debugPath = path.join(LOG_DIR, 'vo-debug.log');
+        if (fs.existsSync(debugPath)) voDebugLog = fs.readFileSync(debugPath, 'utf8');
+      } catch {}
+    }
 
+    // No name is sent. When the app has a session, the server links the report
+    // to that account from the token below; when it does not, the report stays
+    // anonymous — which is what makes "I cannot sign in" reportable at all.
     const payload = JSON.stringify({
+      product: 'edit-bay-studio',
       appVersion: APP_VERSION,
-      userName,
+      platform: process.platform,
       failedUrl: failedUrl || '',
       description: description || '',
       logs: recentLogs,
+      voDebugLog,
       timestamp: new Date().toISOString(),
     });
+
+    let token = null;
+    try { token = authClient.loadToken(); } catch {}
 
     const url = new URL(REPORT_URL);
     const options = {
@@ -2217,7 +3169,8 @@ ipcMain.handle('submit-report', (_e, { failedUrl, description }) => {
       headers: {
         'Content-Type': 'application/json',
         'Content-Length': Buffer.byteLength(payload),
-        'User-Agent': 'RAVdownloader/' + APP_VERSION,
+        'User-Agent': 'EditBayStudio/' + APP_VERSION,
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
       },
     };
 
@@ -2229,7 +3182,11 @@ ipcMain.handle('submit-report', (_e, { failedUrl, description }) => {
           logEntry({ event: 'report-submitted', failedUrl });
           resolve({ success: true });
         } else {
-          resolve({ success: false, error: `Server responded with ${res.statusCode}` });
+          // The API explains itself — "you have sent several reports already",
+          // and so on. Show that rather than a bare status code.
+          let msg = `Server responded with ${res.statusCode}`;
+          try { const j = JSON.parse(body); if (j && j.error) msg = j.error; } catch {}
+          resolve({ success: false, error: msg });
         }
       });
     });
@@ -2294,4 +3251,360 @@ ipcMain.handle('get-diagnostics', async () => {
     isDev,
     candidates: candidateInfo,
   };
+});
+
+// ─── Social Media tab ───────────────────────────────────────────────────────
+// Pipeline: download once (cap 1440p) → extract preview frame → user reframes
+// in a canvas → render final MP4 with reframe + optional trim/limiter/bugs.
+const SOCIAL_TMP_DIR = () => path.join(app.getPath('temp'), 'EditBayStudio-social');
+let socialActiveProc = null;
+
+function sendSocialProgress(kind, payload) {
+  try {
+    mainWindow?.webContents.send('social-progress', { kind, ...payload });
+  } catch {}
+}
+
+function socialSanitizeFilename(s) {
+  return String(s || 'video').replace(/[<>:"/\\|?*\x00-\x1f]/g, '_').replace(/\s+/g, ' ').trim().slice(0, 100) || 'video';
+}
+
+ipcMain.handle('social-download', async (_e, { url }) => {
+  if (!url || typeof url !== 'string') return { ok: false, error: 'URL required' };
+  try { ensureDir(SOCIAL_TMP_DIR()); } catch (e) { return { ok: false, error: 'Could not create temp dir: ' + e.message }; }
+  const stem = `sm-${Date.now()}-${Math.floor(Math.random() * 100000)}`;
+  const outputTemplate = path.join(SOCIAL_TMP_DIR(), `${stem}.%(ext)s`);
+  const format = 'bestvideo[height<=1440][vcodec^=avc1]+bestaudio[acodec^=mp4a]/bestvideo[height<=1440]+bestaudio/best[height<=1440]/best';
+
+  const args = [
+    '--no-playlist',
+    '--merge-output-format', 'mp4',
+    '-f', format,
+    '-o', outputTemplate,
+    '--newline',
+    '--print', 'after_move:%(filepath)s',
+    '--print', 'before_dl:%(title)s',
+    url,
+  ];
+  const cookiesFile = getActiveCookiesPath();
+  if (cookiesFile) { args.push('--cookies', cookiesFile); }
+
+  return new Promise((resolve) => {
+    let proc;
+    try {
+      proc = spawn(YTDLP, args, {
+        windowsHide: true,
+        env: { ...process.env, PATH: BIN_DIR + path.delimiter + (process.env.PATH || '') },
+      });
+    } catch (err) { return resolve({ ok: false, error: 'Could not start the media engine: ' + err.message }); }
+    socialActiveProc = proc;
+
+    let stdout = '', stderr = '', title = '', outFile = '';
+    proc.stdout.on('data', d => {
+      const chunk = d.toString();
+      stdout += chunk;
+      for (const line of chunk.split(/\r?\n/)) {
+        if (!line) continue;
+        // Distinguish yt-dlp progress lines from the print sentinels
+        if (line.startsWith('[download]') || line.startsWith('[Merger]') || line.startsWith('[ffmpeg]') || line.startsWith('[ExtractAudio]')) {
+          sendSocialProgress('download', { line });
+          continue;
+        }
+        // Titles / filepaths from --print
+        if (!title && !line.match(/^[\/A-Za-z]:.*\.(mp4|mkv|webm|m4a)$/i)) { title = line.trim(); continue; }
+        if (line.match(/\.(mp4|mkv|webm)$/i) && fs.existsSync(line.trim())) { outFile = line.trim(); }
+      }
+    });
+    proc.stderr.on('data', d => { stderr += d.toString(); sendSocialProgress('download', { line: d.toString().split('\n')[0] }); });
+
+    proc.on('close', async (code) => {
+      socialActiveProc = null;
+      if (code !== 0 || !outFile || !fs.existsSync(outFile)) {
+        // Fallback: scan temp dir for the newest file matching stem
+        try {
+          const found = fs.readdirSync(SOCIAL_TMP_DIR()).find(f => f.startsWith(stem));
+          if (found) outFile = path.join(SOCIAL_TMP_DIR(), found);
+        } catch {}
+      }
+      if (!outFile || !fs.existsSync(outFile)) {
+        return resolve({ ok: false, error: 'Download failed. ' + (stderr.split('\n').slice(-3).join(' ').slice(0, 400) || `Media engine exited with code ${code}`) });
+      }
+      const meta = await socialProbe(outFile);
+      resolve({ ok: true, path: outFile, title: title || path.basename(outFile, path.extname(outFile)), ...meta });
+    });
+    proc.on('error', err => { socialActiveProc = null; resolve({ ok: false, error: err.message }); });
+  });
+});
+
+async function socialProbe(filePath) {
+  const size = await probeVideoSize(filePath);
+  const has = await probeHasAudio(filePath);
+  // Duration + fps
+  const p = await runExe(FFPROBE, [
+    '-v', 'quiet',
+    '-select_streams', 'v:0',
+    '-show_entries', 'stream=r_frame_rate,duration:format=duration',
+    '-of', 'default=noprint_wrappers=1:nokey=1',
+    filePath,
+  ], 15000);
+  const lines = (p.stdout || '').trim().split('\n').filter(Boolean);
+  let fps = 30, duration = 0;
+  for (const l of lines) {
+    if (l.includes('/')) {
+      const [num, den] = l.split('/').map(Number);
+      if (num && den) fps = num / den;
+    } else {
+      const d = parseFloat(l);
+      if (!isNaN(d)) duration = Math.max(duration, d);
+    }
+  }
+  return {
+    width: size?.width || 0,
+    height: size?.height || 0,
+    duration,
+    fps: Math.min(60, fps || 30),
+    hasAudio: has,
+  };
+}
+
+ipcMain.handle('social-extract-frame', async (_e, { sourcePath, timeSec }) => {
+  if (!sourcePath || !fs.existsSync(sourcePath)) return { ok: false, error: 'Source not found' };
+  try { ensureDir(SOCIAL_TMP_DIR()); } catch {}
+  const t = Math.max(0, Number(timeSec) || 0);
+  const outJpg = path.join(SOCIAL_TMP_DIR(), `frame-${Date.now()}.jpg`);
+  // Use output-side seek for accuracy (input-side is fast but sometimes wrong on B-frames)
+  const args = ['-y', '-ss', String(t), '-i', sourcePath, '-frames:v', '1', '-q:v', '3', outJpg];
+  const r = await runExe(FFMPEG, args, 20000);
+  if (r.code !== 0 || !fs.existsSync(outJpg)) return { ok: false, error: 'Frame extraction failed: ' + (r.stderr.slice(-300) || `exit ${r.code}`) };
+  try {
+    const buf = fs.readFileSync(outJpg);
+    const dataUrl = 'data:image/jpeg;base64,' + buf.toString('base64');
+    try { fs.unlinkSync(outJpg); } catch {}
+    return { ok: true, dataUrl };
+  } catch (e) { return { ok: false, error: e.message }; }
+});
+
+ipcMain.on('social-cancel', () => {
+  if (socialActiveProc) {
+    try { socialActiveProc.kill(); } catch {}
+    socialActiveProc = null;
+  }
+});
+
+// Resolve the user-supplied logo-bug image. The user picks it from their own
+// filesystem, so it always lives outside app.asar and ffmpeg can read it directly.
+// We only verify it still exists — a logo can be moved or deleted between runs.
+function socialResolveLogoBugPath(p) {
+  if (!p) return null;
+  try { return fs.existsSync(p) ? p : null; } catch { return null; }
+}
+
+// Build the ffmpeg filter_complex for the social render.
+// Coordinate system: everything below is in OUTPUT pixels (1080x1080 or 1080x1920).
+//   videoTransform: { scale, offsetX, offsetY }
+//     - scale     — user's zoom factor RELATIVE to "fit" (1.0 = fit, 2.0 = 2× fit)
+//     - offsetX/Y — top-left corner of the placed video, in output pixels
+//   sourceBug: { on, text, caps, invert, fontSize, outline, x, y }  (x,y = top-left in output px)
+//   logoBug:   { on, path, widthPx, x, y }                          (x,y = top-left in output px)
+function buildSocialFilterGraph({
+  outW, outH, srcW, srcH, videoTransform,
+  logoBugPath, logoBug, sourceBug, fontPath,
+}) {
+  const parts = [];
+  const inputs = [];   // extra -i files (logo bug PNG)
+
+  // 1. Blurred pillarbox background — always use the "cover" scale so the
+  //    background fills the frame regardless of aspect ratio.
+  const sigma = 20;
+  parts.push(
+    `[0:v]scale=${outW}:${outH}:force_original_aspect_ratio=increase,crop=${outW}:${outH},gblur=sigma=${sigma}[bg]`
+  );
+
+  // 2. Foreground video, sized to (fitScale × userZoom) of source.
+  const fitScale = Math.min(outW / srcW, outH / srcH);
+  const finalScale = Math.max(0.01, fitScale * (videoTransform.scale || 1));
+  const fgW = Math.max(2, Math.round(srcW * finalScale));
+  const fgH = Math.max(2, Math.round(srcH * finalScale));
+  parts.push(`[0:v]scale=${fgW}:${fgH}[fg]`);
+
+  // 3. Overlay fg onto bg. The user's offset was chosen relative to the
+  //    default "fit" placement, so we translate it into absolute overlay coords.
+  //    ffmpeg's overlay expects top-left; we let overlay clip beyond bounds.
+  const fitOffsetX = Math.round((outW - srcW * fitScale) / 2);
+  const fitOffsetY = Math.round((outH - srcH * fitScale) / 2);
+  // Rescale the offset delta from user's "fit-relative" to "final-scale-relative"
+  // so zooming in behaves as a scale-around-center feel.
+  const overlayX = Math.round((videoTransform.offsetX ?? fitOffsetX));
+  const overlayY = Math.round((videoTransform.offsetY ?? fitOffsetY));
+  parts.push(`[bg][fg]overlay=${overlayX}:${overlayY}[composed]`);
+  let lastLabel = 'composed';
+
+  // 4. Source Bug — drawtext.
+  if (sourceBug && sourceBug.on && sourceBug.text && String(sourceBug.text).trim() && fontPath) {
+    const raw = sourceBug.caps ? String(sourceBug.text).trim().toUpperCase() : String(sourceBug.text).trim();
+    const text = escapeFFmpegText(raw);
+    const ffFontPath = fontPath.replace(/\\/g, '/').replace(/:/g, '\\:');
+    const fontColor  = sourceBug.invert ? 'black' : 'white';
+    const borderColor = sourceBug.invert ? 'white' : 'black';
+    const outline = Math.max(0, Math.min(24, Number(sourceBug.outline) || 0));
+    const fontSize = Math.max(8, Math.min(400, Number(sourceBug.fontSize) || 48));
+    const bx = Math.round(sourceBug.x || 0);
+    const by = Math.round(sourceBug.y || 0);
+    const border = outline > 0 ? `:bordercolor=${borderColor}:borderw=${outline}` : '';
+    parts.push(
+      `[${lastLabel}]drawtext=fontfile='${ffFontPath}':text='${text}':fontcolor=${fontColor}:fontsize=${fontSize}:x=${bx}:y=${by}${border}[withtext]`
+    );
+    lastLabel = 'withtext';
+  }
+
+  // 5. Logo Bug — user-supplied image overlay with user-selected opacity (default 0.7).
+  if (logoBug && logoBug.on && logoBugPath && logoBug.widthPx > 0) {
+    inputs.push(logoBugPath);
+    const idx = inputs.length; // becomes [1:v] since [0:v] is source
+    const rw = Math.max(4, Math.round(logoBug.widthPx));
+    const alpha = Math.max(0.05, Math.min(1, Number(logoBug.opacity) || 0.7));
+    parts.push(`[${idx}:v]scale=${rw}:-1,format=rgba,colorchannelmixer=aa=${alpha.toFixed(3)}[logobug]`);
+    const rx = Math.round(logoBug.x || 0);
+    const ry = Math.round(logoBug.y || 0);
+    parts.push(`[${lastLabel}][logobug]overlay=${rx}:${ry}[withlogo]`);
+    lastLabel = 'withlogo';
+  }
+
+  // Keep the trailing [label] — the caller does `-map [lastLabel]` so ffmpeg
+  // needs the named output to exist in the graph.
+  return { filter: parts.join(';'), extraInputs: inputs, lastLabel };
+}
+
+ipcMain.handle('social-render', async (_e, opts) => {
+  const {
+    sourcePath, format, videoTransform, trim, noAudio, hardLimiter,
+    sourceBug, logoBug, customFilename, title,
+  } = opts || {};
+
+  if (!sourcePath || !fs.existsSync(sourcePath)) return { ok: false, error: 'Source video no longer exists' };
+  if (format !== 'square' && format !== 'vertical') return { ok: false, error: 'Bad format' };
+
+  const outW = 1080;
+  const outH = (format === 'square') ? 1080 : 1920;
+
+  const meta = await socialProbe(sourcePath);
+  const srcW = meta.width || 1920;
+  const srcH = meta.height || 1080;
+  const hasAudio = meta.hasAudio;
+
+  // Output path
+  const settings = readStore();
+  const dlDir = settings.downloadPath || path.join(app.getPath('downloads'), 'Edit Bay Studio');
+  try { ensureDir(dlDir); } catch (e) { return { ok: false, error: 'Could not create download folder: ' + e.message }; }
+
+  const baseName = customFilename && String(customFilename).trim()
+    ? socialSanitizeFilename(customFilename)
+    : socialSanitizeFilename(title || path.basename(sourcePath, path.extname(sourcePath))) + '-' + format;
+  let outputPath = path.join(dlDir, `${baseName}.mp4`);
+  // Avoid clobbering existing files
+  let n = 1;
+  while (fs.existsSync(outputPath)) {
+    outputPath = path.join(dlDir, `${baseName} (${n++}).mp4`);
+    if (n > 500) break;
+  }
+
+  // Build ffmpeg args
+  const args = [];
+  const startSec = trim ? normalizeFFmpegTime(trim.in) : null;
+  const endSec   = trim ? normalizeFFmpegTime(trim.out) : null;
+  if (startSec !== null) args.push('-ss', startSec);
+  if (endSec   !== null) args.push('-to', endSec);
+  args.push('-i', sourcePath);
+
+  const logoBugPath = logoBug?.on ? socialResolveLogoBugPath(logoBug.path) : null;
+  const fontPath = resolveFontPath();
+
+  const graph = buildSocialFilterGraph({
+    outW, outH, srcW, srcH,
+    videoTransform: videoTransform || { scale: 1, offsetX: 0, offsetY: 0 },
+    logoBugPath, logoBug, sourceBug, fontPath,
+  });
+
+  // Extra inputs come AFTER the source -i to keep [0:v] as the source.
+  for (const extra of graph.extraInputs) args.push('-i', extra);
+
+  args.push('-filter_complex', graph.filter);
+  args.push('-map', `[${graph.lastLabel}]`);
+
+  if (noAudio || !hasAudio) {
+    args.push('-an');
+  } else {
+    args.push('-map', '0:a?');
+    if (hardLimiter) args.push('-af', 'alimiter=limit=0.251189:level=0');
+    args.push('-c:a', 'aac', '-b:a', '192k');
+  }
+
+  args.push(
+    '-r', String(Math.min(60, Math.round(meta.fps || 30))),
+    '-c:v', 'libx264', '-preset', 'fast', '-crf', '18',
+    '-pix_fmt', 'yuv420p', '-movflags', '+faststart',
+    '-y', outputPath
+  );
+
+  logEntry({ event: 'social-render-start', srcW, srcH, outW, outH, format, hasAudio, noAudio });
+
+  const durationForPct = (() => {
+    let d = meta.duration || 0;
+    if (startSec !== null && endSec !== null) d = Math.max(0.1, Number(endSec) - Number(startSec));
+    else if (startSec !== null) d = Math.max(0.1, d - Number(startSec));
+    else if (endSec !== null)   d = Math.min(d, Number(endSec));
+    return d || 0;
+  })();
+
+  sendSocialProgress('render', { pct: 0, line: 'Starting render…' });
+
+  return new Promise((resolve) => {
+    let proc;
+    try { proc = spawnFF(args, { windowsHide: true }); }
+    catch (err) { return resolve({ ok: false, error: 'ffmpeg spawn failed: ' + err.message }); }
+    socialActiveProc = proc;
+    setTaskbarProgress(0, 'normal');
+
+    let stderr = '';
+    proc.stderr.on('data', d => {
+      const chunk = d.toString();
+      stderr += chunk;
+      // Parse time= from ffmpeg progress lines
+      const m = chunk.match(/time=(\d+):(\d+):(\d+(?:\.\d+)?)/);
+      if (m) {
+        const cur = (+m[1]) * 3600 + (+m[2]) * 60 + parseFloat(m[3]);
+        const pct = durationForPct ? Math.max(0, Math.min(99, (cur / durationForPct) * 100)) : 0;
+        setTaskbarProgress(pct / 100, 'normal');
+        sendSocialProgress('render', { pct, line: `Encoding: ${pct.toFixed(1)}%` });
+      }
+    });
+    proc.on('close', code => {
+      socialActiveProc = null;
+      setTaskbarProgress(-1);
+      if (code !== 0 || !fs.existsSync(outputPath)) {
+        const errorTail = stderr.slice(-2000);
+        logEntry({
+          event: 'social-render-error',
+          exitCode: code,
+          format, srcW, srcH, outW, outH,
+          hasAudio, noAudio, hardLimiter,
+          hasSourceBug: !!(sourceBug && sourceBug.on && sourceBug.text),
+          hasRavBug: !!(logoBug && logoBug.on),
+          filterGraph: graph.filter,
+          ffmpegArgs: args.join(' '),
+          stderrTail: errorTail,
+        });
+        return resolve({ ok: false, error: 'Render failed. ' + (errorTail.slice(-500) || `ffmpeg exit ${code}`), stderrTail: errorTail });
+      }
+      logEntry({ event: 'social-render-done', outputPath, exitCode: 0 });
+      sendSocialProgress('render', { pct: 100, line: 'Done!' });
+      resolve({ ok: true, outputPath });
+    });
+    proc.on('error', err => {
+      socialActiveProc = null;
+      setTaskbarProgress(-1);
+      logEntry({ event: 'social-render-error', spawn: 'error', message: err.message });
+      resolve({ ok: false, error: err.message });
+    });
+  });
 });

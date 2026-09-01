@@ -1,0 +1,392 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Edit Bay Studio — Sign in</title>
+<meta http-equiv="Content-Security-Policy"
+      content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:;">
+<style>
+  /* Edit Bay Tools design system — ink ramp, Signal Blue accent. Fonts are
+     loaded from disk, not the network, so this window renders with no
+     connection and the strict CSP stays intact. */
+  @font-face{font-family:'Barnet Sans';src:url('../../assets/barnet-sans/BarnetSans-Bold.otf') format('opentype');font-weight:700;font-style:normal;font-display:swap}
+  @font-face{font-family:'Barnet Sans';src:url('../../assets/barnet-sans/BarnetSans-Medium.otf') format('opentype');font-weight:500;font-style:normal;font-display:swap}
+  @font-face{font-family:'Barnet Sans';src:url('../../assets/barnet-sans/BarnetSans-Regular.otf') format('opentype');font-weight:400;font-style:normal;font-display:swap}
+
+  :root{
+    --ink-950:#05090F; --ink-900:#0A1220; --ink-850:#0D1524; --ink-800:#111B2C;
+    --ink-700:#1A2639; --ink-600:#2B3B54; --ink-500:#4A5C79; --ink-400:#6B7C99;
+    --ink-300:#94A3B8; --ink-200:#C3CDDB;
+    --blue-700:#0A3FB0; --blue-600:#0E4FD6; --blue-500:#1060F8; --blue-400:#4C86FA;
+    --tally-500:#F0384A; --amber-500:#F5A524; --green-500:#17B26A;
+    --accent:var(--blue-500); --accent-hover:var(--blue-600);
+    --text:#FFFFFF; --text2:var(--ink-200); --text3:var(--ink-400);
+    --border:rgba(255,255,255,.07); --border2:rgba(255,255,255,.14);
+    --radius:10px; --radius-sm:6px;
+    --font:system-ui,-apple-system,'Segoe UI',sans-serif;
+    --font-display:'Barnet Sans',var(--font);
+    --mono:ui-monospace,'Cascadia Mono','Consolas',monospace;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0;height:100vh;overflow:hidden;background:var(--ink-950);
+    color:var(--text);font-family:var(--font);font-size:14px;
+    -webkit-user-select:none;user-select:none}
+  input{-webkit-user-select:text;user-select:text;-webkit-app-region:no-drag}
+
+  .titlebar{-webkit-app-region:drag;height:34px;display:flex;justify-content:flex-end;
+    align-items:center;background:var(--ink-900);border-bottom:1px solid var(--border);flex-shrink:0}
+  .titlebar button{-webkit-app-region:no-drag;background:transparent;border:none;
+    color:var(--ink-300);width:44px;height:34px;font-size:14px;cursor:pointer}
+  .titlebar button:hover{background:rgba(255,255,255,.07);color:#fff}
+  .titlebar button.close:hover{background:var(--tally-500);color:#fff}
+  .titlebar.mac{display:none}
+
+  .shell{height:calc(100vh - 34px);overflow-y:auto;padding:28px 34px 34px;
+    display:flex;flex-direction:column}
+  .shell.mac{height:100vh;padding-top:44px}
+
+  /* Wordmark, type-set rather than an image so it stays crisp at any scale */
+  .brand{text-align:center;margin-bottom:24px}
+  .wordmark{font-family:var(--font-display);font-weight:700;font-size:19px;
+    letter-spacing:.01em;line-height:1;display:inline-flex;gap:.22em}
+  .wm-1{color:#fff}.wm-2{color:var(--accent)}.wm-3{color:#fff}
+  .brand .product{display:block;margin-top:7px;font-family:var(--mono);font-size:10.5px;
+    letter-spacing:.19em;text-transform:uppercase;color:var(--text3)}
+
+  h2{font-family:var(--font-display);font-size:19px;font-weight:700;letter-spacing:-.01em;
+    margin:0 0 6px;text-align:center}
+  .sub{font-size:12.5px;line-height:1.55;color:var(--text3);text-align:center;margin:0 0 20px}
+
+  .field{margin-bottom:13px}
+  .field label{display:block;font-size:11.5px;font-weight:500;color:var(--text2);margin-bottom:5px}
+  .field .hint{font-size:11px;color:var(--text3);margin-top:5px;line-height:1.45}
+  input{width:100%;height:38px;padding:0 11px;font-family:inherit;font-size:13.5px;color:#fff;
+    background:var(--ink-850);border:1px solid var(--ink-700);border-radius:var(--radius-sm);
+    outline:none;transition:border-color .12s,box-shadow .12s}
+  input:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(16,96,248,.24)}
+  input::placeholder{color:var(--ink-500)}
+  .row2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+
+  .check{display:flex;gap:9px;align-items:flex-start;font-size:11.5px;line-height:1.5;
+    color:var(--text2);margin:4px 0 16px}
+  .check input{width:15px;height:15px;flex:none;margin-top:1px;accent-color:var(--accent)}
+
+  button.primary{width:100%;height:40px;border:none;border-radius:var(--radius-sm);cursor:pointer;
+    background:var(--accent);color:#fff;font-family:inherit;font-size:14px;font-weight:500;
+    transition:background .12s}
+  button.primary:hover{background:var(--accent-hover)}
+  button.primary[disabled]{opacity:.55;cursor:default}
+  .link-btn{background:none;border:none;color:var(--blue-400);cursor:pointer;font:inherit;
+    font-size:12.5px;padding:4px}
+  .link-btn:hover{text-decoration:underline}
+  .alt{text-align:center;margin-top:16px;font-size:12.5px;color:var(--text3)}
+
+  .msg{padding:10px 12px;border-radius:var(--radius-sm);font-size:12.5px;line-height:1.5;
+    margin-bottom:14px}
+  .msg.error{background:rgba(240,56,74,.12);border:1px solid rgba(240,56,74,.32);color:#FF8A94}
+  .msg.info{background:rgba(16,96,248,.12);border:1px solid rgba(16,96,248,.32);color:var(--blue-400)}
+  .msg.ok{background:rgba(23,178,106,.12);border:1px solid rgba(23,178,106,.32);color:#4FD99B}
+  .msg.warn{background:rgba(245,165,36,.12);border:1px solid rgba(245,165,36,.32);color:#F0C97A}
+
+  .code-input{font-family:var(--mono);font-size:21px;letter-spacing:.34em;text-align:center;height:50px}
+  .foot{margin-top:auto;padding-top:22px;text-align:center;font-size:11px;color:var(--ink-500);
+    line-height:1.7}
+  .foot a{color:var(--ink-400);cursor:pointer;text-decoration:none}
+  .foot a:hover{color:var(--blue-400);text-decoration:underline}
+  [hidden]{display:none !important}
+</style>
+</head>
+<body>
+
+<div class="titlebar" id="titlebar">
+  <button id="btnMin" aria-label="Minimise">&#8211;</button>
+  <button id="btnClose" class="close" aria-label="Close">&#10005;</button>
+</div>
+
+<div class="shell" id="shell">
+  <div class="brand">
+    <span class="wordmark"><span class="wm-1">EDIT</span><span class="wm-2">BAY</span><span class="wm-3">TOOLS</span></span>
+    <span class="product">Edit Bay Studio</span>
+  </div>
+
+  <div id="msgSlot"></div>
+
+  <!-- ── Sign in ─────────────────────────────────────────────────────────── -->
+  <section id="viewSignIn">
+    <h2>Sign in</h2>
+    <p class="sub">Use your Edit Bay Tools account.</p>
+    <form id="formSignIn">
+      <div class="field"><label for="siEmail">Email</label>
+        <input id="siEmail" type="email" autocomplete="username" required></div>
+      <div class="field"><label for="siPw">Password</label>
+        <input id="siPw" type="password" autocomplete="current-password" required></div>
+      <button class="primary" id="siGo" type="submit">Sign in</button>
+    </form>
+    <div class="alt">
+      <button class="link-btn" id="toForgot">Forgot your password?</button><br>
+      No account yet? <button class="link-btn" id="toSignUp">Create one</button>
+    </div>
+  </section>
+
+  <!-- ── Create account ──────────────────────────────────────────────────── -->
+  <section id="viewSignUp" hidden>
+    <h2>Create your account</h2>
+    <p class="sub">Free to create. A 14-day trial unlocks every tool.</p>
+    <form id="formSignUp">
+      <div class="row2">
+        <div class="field"><label for="suFirst">First name</label>
+          <input id="suFirst" autocomplete="given-name" required></div>
+        <div class="field"><label for="suLast">Last name</label>
+          <input id="suLast" autocomplete="family-name"></div>
+      </div>
+      <div class="field"><label for="suEmail">Email</label>
+        <input id="suEmail" type="email" autocomplete="email" required></div>
+      <div class="field"><label for="suPhone">Mobile number <span style="opacity:.6">(optional)</span></label>
+        <input id="suPhone" type="tel" autocomplete="tel" placeholder="+1 555 123 4567">
+        <div class="hint">Only so support can reach you. We never text marketing.</div></div>
+      <div class="field"><label for="suPw">Password</label>
+        <input id="suPw" type="password" autocomplete="new-password" required>
+        <div class="hint">At least 10 characters.</div></div>
+      <div class="field"><label for="suPw2">Confirm password</label>
+        <input id="suPw2" type="password" autocomplete="new-password" required>
+        <div class="hint" id="suMatch"></div></div>
+      <label class="check"><input id="suTerms" type="checkbox" required>
+        <span>I agree to the <a class="link-btn" data-legal="terms">Terms</a> and
+        <a class="link-btn" data-legal="privacy">Privacy Policy</a>, and understand a plan renews
+        automatically until cancelled.</span></label>
+      <button class="primary" id="suGo" type="submit">Create account</button>
+    </form>
+    <div class="alt">Already have one? <button class="link-btn" id="backToSignIn1">Sign in</button></div>
+  </section>
+
+  <!-- ── Confirm number ──────────────────────────────────────────────────── -->
+  <section id="viewVerify" hidden>
+    <h2>Confirm your email</h2>
+    <p class="sub" id="verifySub">We sent a 6-digit code to your email address.</p>
+    <form id="formVerify">
+      <div class="field"><label for="vCode">Verification code</label>
+        <input id="vCode" class="code-input" inputmode="numeric" maxlength="6" placeholder="000000"
+               autocomplete="one-time-code" required></div>
+      <button class="primary" id="vGo" type="submit">Confirm</button>
+    </form>
+    <p class="sub" style="margin-top:14px">
+      <b>Not there?</b> Check your spam or junk folder — we are a new sender, so mail
+      providers are cautious at first. Marking it "not spam" keeps later emails,
+      including your receipts, out of there.
+    </p>
+    <div class="alt">
+      <button class="link-btn" id="vResend">Send a new code</button><br>
+      <button class="link-btn" id="vSkip">Skip for now</button>
+    </div>
+  </section>
+
+  <!-- ── Forgot password ─────────────────────────────────────────────────── -->
+  <section id="viewForgot" hidden>
+    <h2>Reset your password</h2>
+    <p class="sub">We will email you a link to set a new one.</p>
+    <form id="formForgot">
+      <div class="field"><label for="fEmail">Email</label>
+        <input id="fEmail" type="email" autocomplete="username" required></div>
+      <button class="primary" id="fGo" type="submit">Send the link</button>
+    </form>
+    <div class="alt"><button class="link-btn" id="backToSignIn2">Back to sign in</button></div>
+  </section>
+
+  <!-- ── No plan ─────────────────────────────────────────────────────────── -->
+  <section id="viewNoPlan" hidden>
+    <h2>Start your free trial</h2>
+    <p class="sub">Your account is ready. Edit Bay Studio needs an active plan — the first 14 days
+      are free and you can cancel any time.</p>
+    <button class="primary" id="npBuy">See plans</button>
+    <div class="alt">
+      <button class="link-btn" id="npRecheck">I've already paid</button><br>
+      <button class="link-btn" id="npOut">Sign out</button>
+    </div>
+  </section>
+
+  <div class="foot">
+    <a data-legal="terms">Terms</a> · <a data-legal="privacy">Privacy</a> ·
+    <a data-legal="refunds">Refunds</a><br>
+    Support@editbaytools.com
+  </div>
+</div>
+
+<script>
+(() => {
+  const auth = window.authApi;
+  const isMac = auth.platform === 'darwin';
+  if (isMac) {
+    document.getElementById('titlebar').classList.add('mac');
+    document.getElementById('shell').classList.add('mac');
+  }
+  document.getElementById('btnMin').onclick = () => auth.winMin();
+  document.getElementById('btnClose').onclick = () => auth.winClose();
+
+  const $ = (id) => document.getElementById(id);
+  const VIEWS = ['viewSignIn', 'viewSignUp', 'viewVerify', 'viewForgot', 'viewNoPlan'];
+
+  function show(view) {
+    VIEWS.forEach(v => { $(v).hidden = v !== view; });
+    clearMsg();
+  }
+  function msg(text, kind = 'error') {
+    $('msgSlot').innerHTML = `<div class="msg ${kind}">${text}</div>`;
+  }
+  function clearMsg() { $('msgSlot').innerHTML = ''; }
+
+  function busy(btn, on, label) {
+    btn.disabled = on;
+    if (on) { btn.dataset.label = btn.textContent; btn.textContent = label || 'Working…'; }
+    else if (btn.dataset.label) { btn.textContent = btn.dataset.label; }
+  }
+
+  document.querySelectorAll('[data-legal]').forEach(a => {
+    a.onclick = () => auth.openLegal(a.dataset.legal);
+  });
+
+  // ── navigation ─────────────────────────────────────────────────────────
+  $('toSignUp').onclick      = () => show('viewSignUp');
+  $('backToSignIn1').onclick = () => show('viewSignIn');
+  $('backToSignIn2').onclick = () => show('viewSignIn');
+  $('toForgot').onclick      = () => show('viewForgot');
+
+  // ── after a successful sign-in or sign-up ──────────────────────────────
+  //
+  // Three outcomes: confirm the number, buy a plan, or go straight in. The app
+  // window still checks the licence itself — this is only about not dropping
+  // somebody into a locked screen when the real next step is obvious.
+  function afterAuth(r) {
+    if (r.nextStep === 'verify_email') {
+      if (r.emailMasked) $('verifySub').textContent = `We sent a 6-digit code to ${r.emailMasked}.`;
+      // A code that did not send is a retry, not a dead end — say so rather than
+      // leaving somebody staring at an empty box waiting for mail that is not coming.
+      if (r.codeSent === false) {
+        msg('We could not send that code. Use "Send a new code" to try again.', 'warn');
+      }
+      show('viewVerify');
+      return;
+    }
+    if (r.entitlement && r.entitlement.active === false) { show('viewNoPlan'); return; }
+    auth.enterApp();
+  }
+
+  // ── sign in ────────────────────────────────────────────────────────────
+  $('formSignIn').onsubmit = async (e) => {
+    e.preventDefault();
+    clearMsg();
+    busy($('siGo'), true, 'Signing in…');
+    const r = await auth.login({ email: $('siEmail').value.trim(), password: $('siPw').value });
+    busy($('siGo'), false);
+    if (!r.ok) return msg(r.error || 'Those details did not work.');
+    if (r.signedOutOtherSessions) {
+      msg('You were signed out on another machine — your plan allows a limited number of ' +
+          'active sessions at once.', 'info');
+    }
+    afterAuth(r);
+  };
+
+  // ── create account ─────────────────────────────────────────────────────
+  // Told as they type, not after they submit — a typo in a field you cannot
+  // read is a miserable thing to discover late.
+  function checkMatch() {
+    const a = $('suPw').value, b = $('suPw2').value, el = $('suMatch');
+    if (!b) { el.textContent = ''; el.style.color = ''; return true; }
+    const same = a === b;
+    el.textContent = same ? 'Both match.' : 'These do not match yet.';
+    el.style.color = same ? 'var(--green-500)' : 'var(--tally-500)';
+    return same;
+  }
+  $('suPw').addEventListener('input', checkMatch);
+  $('suPw2').addEventListener('input', checkMatch);
+
+  $('formSignUp').onsubmit = async (e) => {
+    e.preventDefault();
+    clearMsg();
+    if ($('suPw').value.length < 10) return msg('Passwords need to be at least 10 characters.');
+    if ($('suPw').value !== $('suPw2').value) {
+      $('suPw2').focus();
+      return msg('Those two passwords do not match.');
+    }
+    busy($('suGo'), true, 'Creating…');
+    const r = await auth.signup({
+      firstName: $('suFirst').value.trim(), lastName: $('suLast').value.trim(),
+      email: $('suEmail').value.trim(), phone: $('suPhone').value.trim(),
+      password: $('suPw').value, acceptedTerms: $('suTerms').checked,
+    });
+    busy($('suGo'), false);
+    if (!r.ok) return msg(r.error || 'We could not create that account.');
+    afterAuth(r);
+  };
+
+  // ── confirm number ─────────────────────────────────────────────────────
+  $('formVerify').onsubmit = async (e) => {
+    e.preventDefault();
+    clearMsg();
+    busy($('vGo'), true, 'Checking…');
+    const r = await auth.verifyEmail({ code: $('vCode').value.trim() });
+    busy($('vGo'), false);
+    if (!r.ok) return msg(r.error || 'That code did not work.');
+    const v = await auth.recheck();
+    if (v.ok && v.entitlement && v.entitlement.active) return auth.enterApp();
+    show('viewNoPlan');
+  };
+
+  $('vResend').onclick = async () => {
+    clearMsg();
+    const r = await auth.sendEmailCode();
+    if (!r.ok) return msg(r.error || 'We could not send the code.');
+    msg('A new code is on its way. Check your spam folder if it does not arrive.', 'ok');
+  };
+
+  $('vSkip').onclick = () => show('viewNoPlan');
+
+  // ── forgot password ────────────────────────────────────────────────────
+  $('formForgot').onsubmit = async (e) => {
+    e.preventDefault();
+    busy($('fGo'), true, 'Sending…');
+    await auth.forgotPassword({ email: $('fEmail').value.trim() });
+    busy($('fGo'), false);
+    // Always the same answer, so this cannot be used to find out who has an account.
+    msg('If that address has an account, a reset link is on its way.', 'ok');
+  };
+
+  // ── no plan ────────────────────────────────────────────────────────────
+  $('npBuy').onclick = () => auth.openPurchase();
+  $('npOut').onclick = async () => { await auth.logout(); show('viewSignIn'); };
+  $('npRecheck').onclick = async () => {
+    const btn = $('npRecheck');
+    busy(btn, true, 'Checking…');
+    const v = await auth.recheck();
+    busy(btn, false);
+    if (v.ok && v.entitlement && v.entitlement.active) return auth.enterApp();
+    // Say what actually happened. Reporting an ended session as "no plan" sent
+    // people looking for a billing problem that was not there.
+    if (!v.ok) {
+      if (v.status === 401) {
+        show('viewSignIn');
+        return msg('Your session ended, so we could not check. Sign in again.', 'info');
+      }
+      return msg(v.error || 'We could not reach Edit Bay Tools. Check your connection.', 'error');
+    }
+    msg('We still cannot see an active plan on this account.', 'info');
+  };
+
+  // ── on load ────────────────────────────────────────────────────────────
+  //
+  // A saved session lands on the step that is actually outstanding rather than
+  // asking for a password that is already known to be right.
+  (async () => {
+    const start = await auth.initialState().catch(() => null);
+    if (!start || !start.user) return;
+    if (!start.user.emailVerified) {
+      show('viewVerify');
+      auth.sendEmailCode().catch(() => {});
+      return;
+    }
+    if (start.entitlement && start.entitlement.active) return auth.enterApp();
+    show('viewNoPlan');
+  })();
+})();
+</script>
+</body>
+</html>

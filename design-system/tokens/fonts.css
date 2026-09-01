@@ -1,0 +1,19 @@
+/* Edit Bay Tools webfonts.
+
+   DISPLAY — Barnet Sans Bold is the real brand face, supplied by the client
+   (assets/fonts/BarnetSans-Bold.otf). Only the Bold weight exists in this
+   project, so display type is set at 700 throughout. Archivo remains the
+   fallback for any weight Barnet Sans cannot serve.
+
+   BODY / MONO — still substituted. No body face was supplied; IBM Plex Sans and
+   IBM Plex Mono carry the engineering register. Replace if the brand has its own. */
+
+@font-face{
+  font-family:"Barnet Sans";
+  src:url("../assets/fonts/BarnetSans-Bold.otf") format("opentype");
+  font-weight:700;
+  font-style:normal;
+  font-display:swap;
+}
+
+@import url("https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap");

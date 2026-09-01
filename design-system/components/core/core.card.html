@@ -1,0 +1,56 @@
+<!-- @dsCard group="Components" viewport="700x300" name="Core" subtitle="Buttons, cards, badges, tags, status and readouts" -->
+<!doctype html><html><head><meta charset="utf-8"><link rel="stylesheet" href="../../styles.css"><link rel="stylesheet" href="../../guidelines/keyframes.css">
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+<script src="../../_ds_bundle.js"></script>
+<style>body{margin:0;padding:16px;background:var(--bg-page)}.row{display:flex;flex-wrap:wrap;align-items:center;gap:10px}.col{display:flex;flex-direction:column;gap:12px}.lbl{font-family:var(--font-display);font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.14em;color:var(--text-muted)}</style></head><body><div id="r"></div>
+<script type="text/babel">
+const { Button, IconButton, Card, Badge, Tag, StatusDot, ProgressBar, Timecode, Icon } = window.EditBayToolsDesignSystem_9ef02b;
+function Demo(){return (
+<div className="col">
+  <div className="row">
+    <Button icon="play">Run job</Button>
+    <Button variant="secondary" icon="folder-open">Watch folder</Button>
+    <Button variant="ghost">Cancel</Button>
+    <Button variant="danger" icon="square">Stop</Button>
+    <Button size="sm" variant="secondary">Small</Button>
+    <Button loading>Queuing</Button>
+    <Button disabled>Disabled</Button>
+  </div>
+  <div className="row">
+    <IconButton icon="refresh-cw" label="Rescan"/>
+    <IconButton icon="scissors" label="Split" active/>
+    <IconButton icon="trash-2" label="Delete" variant="outline"/>
+    <IconButton icon="check" label="Approve" variant="solid"/>
+    <Badge tone="processing" icon="loader">Encoding</Badge>
+    <Badge tone="ok" variant="solid">Complete</Badge>
+    <Badge tone="live" variant="outline">On air</Badge>
+    <Badge tone="warn">Retry 2/3</Badge>
+    <Badge uppercase={false}>ProRes 422 HQ</Badge>
+  </div>
+  <div className="row">
+    <Tag icon="folder">/Volumes/RAID-02</Tag>
+    <Tag selected onClick={()=>{}}>Failed jobs</Tag>
+    <Tag onRemove={()=>{}}>camera-a</Tag>
+    <StatusDot state="live" label="PGM out" pulse/>
+    <StatusDot state="ok" label="Node 3 idle"/>
+    <StatusDot state="warn" label="Disk 84%"/>
+    <Timecode value="01:23:45:12"/>
+    <Timecode value="10:00:00:00" dropFrame tone="accent"/>
+  </div>
+  <div className="row" style={{alignItems:'stretch'}}>
+    <Card meta="Transcode" title="Dailies — Stage 4B" padding={16} style={{width:300}}
+      actions={<IconButton icon="ellipsis" label="More" size="sm"/>}
+      footer={<><Icon name="clock" size={12}/> Queued 14:02:11</>}>
+      62 clips · ProRes 422 HQ → H.264 proxy
+    </Card>
+    <div style={{width:300,display:'flex',flexDirection:'column',gap:14,justifyContent:'center'}}>
+      <ProgressBar label="Transcode" valueLabel="62% · 4m 12s left" value={62} tone="processing"/>
+      <ProgressBar label="Checksum verify" valueLabel="100%" value={100} tone="ok"/>
+      <ProgressBar indeterminate height={3}/>
+    </div>
+  </div>
+</div>);}
+ReactDOM.createRoot(document.getElementById('r')).render(<Demo/>);
+</script></body></html>

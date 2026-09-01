@@ -29,3 +29,13 @@ assets/icon.icns
 .wrangler/
 REF/
 worker.txt
+# ── Not Edit Bay Studio, and this remote is public ──────────────────────────
+# auth-worker/ and admin-site/ are RAVdownloader's backend and admin panel — a
+# separate product. They live here only because the folder was copied during the
+# rebrand, they are already excluded from builds, and this is the only copy on
+# the machine, so they are kept but never published.
+auth-worker/
+admin-site/
+
+# Working copy of the pre-rebrand tree. No reason for anyone else to have it.
+.rebrand-backup/

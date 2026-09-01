@@ -1,0 +1,17 @@
+:root{
+  /* Ink — the logo navy, extended into a full neutral ramp */
+  --ink-950:#05090F; --ink-900:#0A1220; --ink-850:#0D1524; --ink-800:#111B2C;
+  --ink-700:#1A2639; --ink-600:#2B3B54; --ink-500:#4A5C79; --ink-400:#6B7C99;
+  --ink-300:#94A3B8; --ink-200:#C3CDDB; --ink-150:#D6DEE9; --ink-100:#E1E7EF;
+  --ink-050:#F2F5F9; --ink-025:#F8FAFC; --white:#FFFFFF;
+
+  /* Signal Blue — sampled from the logo (#1060F8) */
+  --blue-800:#062A7A; --blue-700:#0A3FB0; --blue-600:#0E4FD6; --blue-500:#1060F8;
+  --blue-400:#4C86FA; --blue-300:#8FB2FC; --blue-200:#BDD1FD; --blue-100:#DCE8FE; --blue-050:#EFF4FF;
+
+  /* Status — borrowed from rack hardware and tally lights */
+  --tally-600:#C8202F; --tally-500:#F0384A; --tally-100:#FEE4E7;
+  --amber-600:#B87503; --amber-500:#F5A524; --amber-100:#FEF0D8;
+  --green-600:#0E8A52; --green-500:#17B26A; --green-100:#DAF5E7;
+  --cyan-600:#0891A8; --cyan-500:#06B6D4; --cyan-100:#D5F4FA;
+}

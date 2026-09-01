@@ -1,0 +1,19 @@
+:root{
+  --font-display:"Barnet Sans","Archivo",system-ui,sans-serif;
+  --font-display-fallback:"Archivo",system-ui,sans-serif;
+  --font-sans:"IBM Plex Sans",system-ui,sans-serif;
+  --font-mono:"IBM Plex Mono",ui-monospace,monospace;
+
+  --size-3xs:11px; --size-2xs:12px; --size-xs:13px; --size-sm:14px; --size-md:16px;
+  --size-lg:18px; --size-xl:22px; --size-2xl:28px; --size-3xl:36px; --size-4xl:48px; --size-5xl:64px;
+
+  --leading-tight:1.08; --leading-snug:1.25; --leading-normal:1.5; --leading-loose:1.65;
+
+  --weight-regular:400; --weight-medium:500; --weight-semibold:600; --weight-bold:700;
+  /* Display type is always 700 — the only Barnet Sans weight in the project. */
+  --weight-display:700;
+
+  /* Tracking. The logo is set wide and uppercase; eyebrows and labels echo it. */
+  --track-logo:0.22em; --track-eyebrow:0.14em; --track-label:0.06em;
+  --track-tight:-0.01em; --track-display:-0.02em;
+}

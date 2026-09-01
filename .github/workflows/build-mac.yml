@@ -18,8 +18,10 @@ jobs:
         id: ver
         run: |
           VERSION=$(node -p "require('./package.json').version")
+          PRODUCT=$(node -p "require('./package.json').build.productName")
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
-          echo "App version: $VERSION"
+          echo "product=$PRODUCT" >> "$GITHUB_OUTPUT"
+          echo "App: $PRODUCT $VERSION"
 
       - name: Set up Node
         uses: actions/setup-node@v4
@@ -28,21 +30,6 @@ jobs:
 
       - name: Install dependencies
         run: npm install
-
-      - name: Download GENERIC LOWER.mov (hosted on Cloudflare)
-        run: |
-          set -e
-          mkdir -p "LowerThird Files"
-          echo "▶ Fetching GENERIC LOWER.mov"
-          curl -L --fail -o "LowerThird Files/GENERIC LOWER.mov" \
-            "https://dl.colinchristy.cc/GENERIC%20LOWER.mov"
-          # Sanity-check size — bail early if the download was a 404 HTML page
-          SIZE=$(stat -f%z "LowerThird Files/GENERIC LOWER.mov" 2>/dev/null || stat -c%s "LowerThird Files/GENERIC LOWER.mov")
-          echo "  Downloaded size: $SIZE bytes"
-          if [ "$SIZE" -lt 1000000 ]; then
-            echo "::error::GENERIC LOWER.mov download is suspiciously small ($SIZE bytes) — check the URL"
-            exit 1
-          fi
 
       - name: Download Mac binaries (yt-dlp, ffmpeg, ffprobe)
         run: |
@@ -88,12 +75,14 @@ jobs:
       - name: Generate .icns from PNG
         run: |
           set -e
-          PNG_SRC="assets/RAV DOWNLOADER ICON.png"
+          # assets/icon-source.png is extracted from assets/icon.ico, so the Mac
+          # icon is the same artwork as the Windows one and cannot drift from it.
+          # The two RAVdownloader-era sources this used to look for were deleted
+          # in the rebrand, which meant this step failed and no Mac build could
+          # complete.
+          PNG_SRC="assets/icon-source.png"
           if [ ! -f "$PNG_SRC" ]; then
-            PNG_SRC="assets/logo.png"
-          fi
-          if [ ! -f "$PNG_SRC" ]; then
-            echo "::error::No source PNG found for icns generation"
+            echo "::error::assets/icon-source.png is missing — regenerate it from assets/icon.ico"
             exit 1
           fi
           mkdir -p /tmp/icon.iconset
@@ -109,6 +98,14 @@ jobs:
           iconutil -c icns /tmp/icon.iconset -o assets/icon.icns
           ls -la assets/icon.icns
 
+      - name: Ensure the DMG installer script is executable
+        run: |
+          # A .command file that is not executable opens in TextEdit instead of
+          # running, which would leave the app quarantined and unopenable. Git on
+          # Windows loses this bit easily, so it is enforced here as well.
+          chmod +x "build/Install Edit Bay Studio.command"
+          ls -l "build/Install Edit Bay Studio.command"
+
       - name: Build DMG
         run: npm run dist:mac
         env:
@@ -118,9 +115,15 @@ jobs:
       - name: Smoke-test the built app
         run: |
           set -e
-          APP="dist/mac-arm64/RAVdownloader.app"
+          PRODUCT="${{ steps.ver.outputs.product }}"
+          APP="dist/mac-arm64/$PRODUCT.app"
           if [ ! -d "$APP" ]; then
-            APP=$(find dist -name 'RAVdownloader.app' -maxdepth 3 -type d | head -n1)
+            APP=$(find dist -name '*.app' -maxdepth 3 -type d | head -n1)
+          fi
+          if [ -z "$APP" ] || [ ! -d "$APP" ]; then
+            echo "::error::No .app bundle produced"
+            ls -laR dist || true
+            exit 1
           fi
           echo "Smoke-testing: $APP"
 
@@ -153,7 +156,7 @@ jobs:
       - name: Upload DMG artifact
         uses: actions/upload-artifact@v4
         with:
-          name: RAVdownloader-mac-arm64-${{ steps.ver.outputs.version }}
+          name: EditBayStudio-mac-arm64-${{ steps.ver.outputs.version }}
           path: ${{ steps.dmg.outputs.path }}
           if-no-files-found: error
           retention-days: 30

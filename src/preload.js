@@ -1,5 +1,42 @@
 const { contextBridge, ipcRenderer } = require('electron');
 
+// Auth API — exposed only to login.html (which imports window.authApi).
+// Kept separate from the main-app `api` so the login window has a narrow surface.
+contextBridge.exposeInMainWorld('authApi', {
+  platform: process.platform,
+  winMin:   () => ipcRenderer.send('win-minimize'),
+  winClose: () => ipcRenderer.send('win-close'),
+
+  signup:         (opts) => ipcRenderer.invoke('auth-signup', opts),
+  login:          (opts) => ipcRenderer.invoke('auth-login', opts),
+  logout:         ()     => ipcRenderer.invoke('auth-logout'),
+  recheck:        ()     => ipcRenderer.invoke('auth-recheck'),
+  initialState:   ()     => ipcRenderer.invoke('auth-initial-state'),
+  changePassword: (opts) => ipcRenderer.invoke('auth-change-password', opts),
+  sendEmailCode:  ()     => ipcRenderer.invoke('auth-send-email-code'),
+  verifyEmail:    (opts) => ipcRenderer.invoke('auth-verify-email', opts),
+  forgotPassword: (opts) => ipcRenderer.invoke('auth-forgot-password', opts),
+  openPurchase:   ()     => ipcRenderer.invoke('license-open-purchase'),
+  enterApp:       ()     => ipcRenderer.send('auth-enter-app'),
+  openLegal:      (which) => ipcRenderer.send('auth-open-legal', which),
+});
+
+// Licensing — the main window asks what the account is entitled to, and is told
+// again whenever that changes.
+contextBridge.exposeInMainWorld('license', {
+  get:          ()  => ipcRenderer.invoke('license-get'),
+  refresh:      ()  => ipcRenderer.invoke('license-refresh'),
+  openPurchase: ()  => ipcRenderer.invoke('license-open-purchase'),
+  openAccount:  ()  => ipcRenderer.invoke('license-open-account'),
+  signOut:      ()  => ipcRenderer.invoke('auth-signout-from-app'),
+  getUser:      ()  => ipcRenderer.invoke('auth-get-user'),
+  onChange:     (fn) => {
+    const h = (_e, state) => fn(state);
+    ipcRenderer.on('license-state', h);
+    return () => ipcRenderer.removeListener('license-state', h);
+  },
+});
+
 contextBridge.exposeInMainWorld('api', {
   // Platform info (used by renderer to swap Windows chrome for native Mac chrome)
   platform: process.platform,
@@ -72,14 +109,6 @@ contextBridge.exposeInMainWorld('api', {
   // Advanced features
   checkFont:      ()   => ipcRenderer.invoke('check-font'),
 
-  // Lower Third Generator
-  getLtFiles:          ()     => ipcRenderer.invoke('get-lt-files'),
-  generateLowerThird:  (opts) => ipcRenderer.invoke('generate-lower-third', opts),
-  onLtProgress: (cb) => {
-    ipcRenderer.removeAllListeners('lt-progress');
-    ipcRenderer.on('lt-progress', (_e, msg) => cb(msg));
-  },
-
   // Merge Videos
   probeMergeDurations: (paths) => ipcRenderer.invoke('probe-merge-durations', paths),
   mergeVideos:  (opts) => ipcRenderer.invoke('merge-videos', opts),
@@ -87,6 +116,15 @@ contextBridge.exposeInMainWorld('api', {
     ipcRenderer.removeAllListeners('merge-progress');
     ipcRenderer.on('merge-progress', (_e, msg) => cb(msg));
   },
+
+  // VO Maker
+  makeVo: (opts) => ipcRenderer.invoke('make-vo', opts),
+  onVoProgress: (cb) => {
+    ipcRenderer.removeAllListeners('vo-progress');
+    ipcRenderer.on('vo-progress', (_e, msg) => cb(msg));
+  },
+  openVoDebugLog: () => ipcRenderer.invoke('open-vo-debug-log'),
+  downloadImageUrl: (url) => ipcRenderer.invoke('download-image-url', url),
 
   // Podcast
   mergePodcast: (opts) => ipcRenderer.invoke('merge-podcast', opts),
@@ -103,4 +141,19 @@ contextBridge.exposeInMainWorld('api', {
   // Logs & diagnostics
   getLogs:        () => ipcRenderer.invoke('get-logs'),
   getDiagnostics: () => ipcRenderer.invoke('get-diagnostics'),
+
+  // Account (from auth session)
+  getAuthUser:         () => ipcRenderer.invoke('auth-get-user'),
+  authSignOut:         () => ipcRenderer.invoke('auth-signout-from-app'),
+  authChangePassword:  (opts) => ipcRenderer.invoke('auth-change-password', opts),
+
+  // Social Media
+  socialDownload:     (opts) => ipcRenderer.invoke('social-download', opts),
+  socialExtractFrame: (opts) => ipcRenderer.invoke('social-extract-frame', opts),
+  socialRender:       (opts) => ipcRenderer.invoke('social-render', opts),
+  socialCancel:       ()     => ipcRenderer.send('social-cancel'),
+  onSocialProgress: (cb) => {
+    ipcRenderer.removeAllListeners('social-progress');
+    ipcRenderer.on('social-progress', (_e, p) => cb(p));
+  },
 });

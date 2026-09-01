@@ -1,0 +1,12 @@
+*,*::before,*::after{box-sizing:border-box}
+body{margin:0;font-family:var(--font-sans);font-size:var(--size-md);line-height:var(--leading-normal);color:var(--text-body);background:var(--bg-page);-webkit-font-smoothing:antialiased}
+h1,h2,h3,h4{font-family:var(--font-display);color:var(--text-heading);margin:0;line-height:var(--leading-tight);letter-spacing:var(--track-display);font-weight:var(--weight-display)}
+h1{font-size:var(--size-4xl)}h2{font-size:var(--size-3xl)}h3{font-size:var(--size-xl)}h4{font-size:var(--size-lg);letter-spacing:var(--track-tight)}
+p{margin:0}
+a{color:var(--text-link);text-decoration:none;transition:color var(--dur-fast) var(--ease-standard)}
+a:hover{color:var(--text-link-hover);text-decoration:underline;text-underline-offset:2px}
+code,kbd,pre,.ebt-mono{font-family:var(--font-mono);font-size:.92em}
+.ebt-eyebrow{font-family:var(--font-display);font-size:var(--size-2xs);font-weight:var(--weight-display);text-transform:uppercase;letter-spacing:var(--track-eyebrow);color:var(--text-muted)}
+::selection{background:var(--blue-100);color:var(--ink-900)}
+:focus-visible{outline:none;box-shadow:var(--ring-focus)}
+.ebt-icon>svg{width:100%;height:100%;display:block;stroke:currentColor}

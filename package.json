@@ -1,17 +1,19 @@
 {
-  "name": "ravdownloader",
-  "version": "3.0.2",
-  "description": "RAVdownloader by Colin - Premium Video Downloader",
+  "name": "edit-bay-studio",
+  "version": "1.0.0",
+  "description": "Edit Bay Studio by Edit Bay Tools — an all-in-one media toolkit for editors, production engineers and broadcast teams.",
+  "author": "Edit Bay Tools",
   "main": "src/main.js",
   "scripts": {
     "start": "electron .",
     "build": "electron-builder --win --x64",
     "dist:mac": "electron-builder --mac --arm64 --publish never",
-    "pack": "electron-builder --dir"
+    "pack": "electron-builder --dir",
+    "test:ui": "electron test/ui"
   },
   "build": {
-    "appId": "com.colin.ravdownloader",
-    "productName": "RAVdownloader",
+    "appId": "com.editbaytools.editbaystudio",
+    "productName": "Edit Bay Studio",
     "win": {
       "target": [
         {
@@ -24,14 +26,32 @@
       "icon": "assets/icon.ico",
       "requestedExecutionLevel": "requireAdministrator",
       "extraResources": [
-        { "from": "bin/",            "to": "bin/",            "filter": ["**/*"] },
-        { "from": "fonts/",          "to": "fonts/",          "filter": ["**/*"] },
-        { "from": "LowerThird Files/", "to": "LowerThird Files/", "filter": ["**/*"] }
+        {
+          "from": "bin/",
+          "to": "bin/",
+          "filter": [
+            "**/*",
+            "!*.bak",
+            "!deno.exe"
+          ]
+        },
+        {
+          "from": "fonts/",
+          "to": "fonts/",
+          "filter": [
+            "**/*"
+          ]
+        }
       ]
     },
     "mac": {
       "target": [
-        { "target": "dmg", "arch": ["arm64"] }
+        {
+          "target": "dmg",
+          "arch": [
+            "arm64"
+          ]
+        }
       ],
       "icon": "assets/icon.icns",
       "category": "public.app-category.video",
@@ -39,19 +59,49 @@
       "hardenedRuntime": false,
       "gatekeeperAssess": false,
       "extraResources": [
-        { "from": "bin-mac/",        "to": "bin/",            "filter": ["**/*"] },
-        { "from": "fonts/",          "to": "fonts/",          "filter": ["**/*"] },
-        { "from": "LowerThird Files/", "to": "LowerThird Files/", "filter": ["**/*"] }
+        {
+          "from": "bin-mac/",
+          "to": "bin/",
+          "filter": [
+            "**/*",
+            "!*.bak"
+          ]
+        },
+        {
+          "from": "fonts/",
+          "to": "fonts/",
+          "filter": [
+            "**/*"
+          ]
+        }
       ]
     },
     "dmg": {
-      "title": "RAVdownloader",
+      "title": "Edit Bay Studio",
       "contents": [
-        { "x": 130, "y": 220, "type": "file" },
-        { "x": 410, "y": 220, "type": "link", "path": "/Applications" },
-        { "x": 270, "y": 380, "type": "file", "path": "build/Install RAVdownloader.command", "name": "Install RAVdownloader.command" }
+        {
+          "x": 130,
+          "y": 220,
+          "type": "file"
+        },
+        {
+          "x": 410,
+          "y": 220,
+          "type": "link",
+          "path": "/Applications"
+        },
+        {
+          "x": 270,
+          "y": 380,
+          "type": "file",
+          "path": "build/Install Edit Bay Studio.command",
+          "name": "Install Edit Bay Studio.command"
+        }
       ],
-      "window": { "width": 540, "height": 480 }
+      "window": {
+        "width": 540,
+        "height": 480
+      }
     },
     "afterPack": "build/afterPack.js",
     "afterSign": "build/afterSign-mac.js",
@@ -61,16 +111,26 @@
       "allowToChangeInstallationDirectory": false,
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
-      "shortcutName": "RAVdownloader",
+      "shortcutName": "Edit Bay Studio",
       "deleteAppDataOnUninstall": false,
-      "uninstallDisplayName": "RAVdownloader by Colin",
+      "uninstallDisplayName": "Edit Bay Studio",
       "include": "installer.nsh"
     },
     "files": [
       "src/**/*",
       "assets/**/*",
+      "fonts/**/*",
       "node_modules/**/*",
-      "package.json"
+      "package.json",
+      "!assets/meme.PNG",
+      "!assets/audio.mp3",
+      "!assets/RAV*",
+      "!assets/PLACE_ICON_HERE.txt",
+      "!assets/logo.svg",
+      "!assets/logo.png",
+      "!**/*.map",
+      "!**/*.bak",
+      "!**/{REF,OLD HTMLS,LowerThird Files,design-system,admin-site,auth-worker,.rebrand-backup}/**"
     ]
   },
   "devDependencies": {

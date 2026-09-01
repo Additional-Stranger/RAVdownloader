@@ -1,0 +1,7 @@
+/* Animation keyframes used by StatusDot, ProgressBar, Dialog, Toast and Button.
+   Import alongside styles.css in any page that renders those states. */
+@keyframes ebt-spin{to{transform:rotate(360deg)}}
+@keyframes ebt-pulse{0%,100%{opacity:1}50%{opacity:.45}}
+@keyframes ebt-slide{0%{transform:translateX(-100%)}100%{transform:translateX(300%)}}
+@keyframes ebt-fade{from{opacity:0}to{opacity:1}}
+@keyframes ebt-rise{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}

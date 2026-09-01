@@ -1,0 +1,5 @@
+:root{
+  /* Tool-shaped, not app-store-shaped: small radii, nothing pill-soft except chips. */
+  --radius-xs:2px; --radius-sm:4px; --radius-md:6px; --radius-lg:10px; --radius-xl:14px; --radius-pill:999px;
+  --border-hair:1px; --border-thick:2px;
+}

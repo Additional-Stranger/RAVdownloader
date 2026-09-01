@@ -6,7 +6,7 @@ exports.default = async function(context) {
   // Windows-only: embed icon via rcedit. On Mac the icon comes from .icns in build config.
   if (context.electronPlatformName !== 'win32') return;
 
-  const exePath = path.join(context.appOutDir, 'RAVdownloader.exe');
+  const exePath = path.join(context.appOutDir, 'Edit Bay Studio.exe');
   const iconPath = path.join(__dirname, '..', 'assets', 'icon.ico');
 
   // Find rcedit in electron-builder cache
@@ -25,6 +25,6 @@ exports.default = async function(context) {
     return;
   }
 
-  console.log('  • setting icon on RAVdownloader.exe');
+  console.log('  • setting icon on Edit Bay Studio.exe');
   execFileSync(rcedit, [exePath, '--set-icon', iconPath]);
 };

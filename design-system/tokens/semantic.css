@@ -1,0 +1,32 @@
+:root{
+  /* Light surfaces — marketing, docs, printed material */
+  --bg-page:var(--ink-025); --bg-surface:var(--white); --bg-sunken:var(--ink-050);
+  --bg-inverse:var(--ink-900); --bg-well:var(--ink-050);
+  --surface-card:var(--white); --surface-card-hover:var(--ink-025);
+  --border-subtle:var(--ink-100); --border-default:var(--ink-150); --border-strong:var(--ink-300);
+  --text-heading:var(--ink-900); --text-body:var(--ink-700); --text-muted:var(--ink-400);
+  --text-inverse:var(--white); --text-link:var(--blue-600); --text-link-hover:var(--blue-700);
+  --text-mono:var(--ink-600);
+
+  --accent:var(--blue-500); --accent-hover:var(--blue-600); --accent-press:var(--blue-700);
+  --accent-soft:var(--blue-050); --accent-border:var(--blue-200); --on-accent:var(--white);
+
+  --state-live:var(--tally-500); --state-warn:var(--amber-500);
+  --state-ok:var(--green-500); --state-processing:var(--cyan-500); --state-idle:var(--ink-300);
+
+  --focus-ring:var(--ring-focus);
+}
+
+/* Dark surfaces — the product itself. Edit suites and control rooms run dim. */
+.ebt-dark{
+  --bg-page:var(--ink-950); --bg-surface:var(--ink-900); --bg-sunken:var(--ink-950);
+  --bg-inverse:var(--white); --bg-well:var(--ink-850);
+  --surface-card:var(--ink-850); --surface-card-hover:var(--ink-800);
+  --border-subtle:rgba(255,255,255,.07); --border-default:rgba(255,255,255,.12); --border-strong:rgba(255,255,255,.22);
+  --text-heading:var(--white); --text-body:var(--ink-200); --text-muted:var(--ink-400);
+  --text-inverse:var(--ink-900); --text-link:var(--blue-400); --text-link-hover:var(--blue-300);
+  --text-mono:var(--ink-300);
+  --accent:var(--blue-500); --accent-hover:var(--blue-400); --accent-press:var(--blue-600);
+  --accent-soft:rgba(16,96,248,.14); --accent-border:rgba(16,96,248,.38); --on-accent:var(--white);
+  --shadow-md:0 2px 6px rgba(0,0,0,.45); --shadow-lg:0 16px 40px rgba(0,0,0,.55);
+}

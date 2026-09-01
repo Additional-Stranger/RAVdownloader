@@ -1,0 +1,30 @@
+<!-- @dsCard group="Components" viewport="700x360" name="Feedback" subtitle="Dialog, toast, tooltip" -->
+<!doctype html><html><head><meta charset="utf-8"><link rel="stylesheet" href="../../styles.css"><link rel="stylesheet" href="../../guidelines/keyframes.css">
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+<script src="../../_ds_bundle.js"></script>
+<style>body{margin:0;padding:16px;background:var(--bg-page)}.row{display:flex;flex-wrap:wrap;align-items:center;gap:10px}.col{display:flex;flex-direction:column;gap:12px}.lbl{font-family:var(--font-display);font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.14em;color:var(--text-muted)}</style></head><body><div id="r"></div>
+<script type="text/babel">
+const { Dialog, Toast, Tooltip, Button, IconButton, StatusDot } = window.EditBayToolsDesignSystem_9ef02b;
+function Demo(){return (
+<div style={{display:'grid',gridTemplateColumns:'auto 1fr',gap:20,alignItems:'start'}}>
+  <div style={{position:'relative'}}>
+    <div style={{position:'relative',height:230,borderRadius:'var(--radius-lg)',overflow:'hidden',border:'1px solid var(--border-subtle)',width:400}}>
+      <Dialog tone="danger" title="Delete 12 source files?" width={360}
+        description="Checksums are verified against the RAID copy. This cannot be undone."
+        footer={<><Button variant="ghost">Cancel</Button><Button variant="danger">Delete files</Button></>}
+        style={{position:'static'}} />
+    </div>
+  </div>
+  <div className="col" style={{gap:12}}>
+    <Toast tone="ok" title="Render complete" description="Dailies — Stage 4B · 62 clips · 8m 04s" onDismiss={()=>{}}/>
+    <Toast tone="error" title="Node 3 unreachable" description="Retrying in 30s." onDismiss={()=>{}}/>
+    <div className="row" style={{marginTop:26,gap:26}}>
+      <Tooltip label="Split clip" shortcut="⌘K" side="bottom"><IconButton icon="scissors" label="Split clip" variant="outline"/></Tooltip>
+      <Tooltip label="Last verified 14:02:11" side="bottom"><StatusDot state="ok" label="Verified"/></Tooltip>
+    </div>
+  </div>
+</div>);}
+ReactDOM.createRoot(document.getElementById('r')).render(<Demo/>);
+</script></body></html>

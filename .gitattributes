@@ -1,2 +1,11 @@
 # Auto detect text files and perform LF normalization
 * text=auto
+
+# Anything macOS or Linux executes must keep LF endings. A shell script with
+# CRLF fails with "bad interpreter: /bin/bash^M" — which reads like a corrupt
+# download rather than a line-ending problem, and costs an afternoon to find.
+*.command text eol=lf
+*.sh      text eol=lf
+
+# Keep the DMG installer executable regardless of the platform it was committed
+# from; Git on Windows does not track the execute bit.

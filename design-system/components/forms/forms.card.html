@@ -1,0 +1,30 @@
+<!-- @dsCard group="Components" viewport="700x330" name="Forms" subtitle="Input, select, checkbox, radio, switch" -->
+<!doctype html><html><head><meta charset="utf-8"><link rel="stylesheet" href="../../styles.css"><link rel="stylesheet" href="../../guidelines/keyframes.css">
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+<script src="../../_ds_bundle.js"></script>
+<style>body{margin:0;padding:16px;background:var(--bg-page)}.row{display:flex;flex-wrap:wrap;align-items:center;gap:10px}.col{display:flex;flex-direction:column;gap:12px}.lbl{font-family:var(--font-display);font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.14em;color:var(--text-muted)}</style></head><body><div id="r"></div>
+<script type="text/babel">
+const { Input, Select, Checkbox, Radio, Switch } = window.EditBayToolsDesignSystem_9ef02b;
+function Demo(){
+  const [m,setM]=React.useState('copy');const [a,setA]=React.useState(true);const [c,setC]=React.useState(true);
+  return (
+  <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'18px 24px'}}>
+    <Input label="Watch folder" icon="folder" mono defaultValue="/Volumes/RAID-02/ingest"/>
+    <Input label="Target bitrate" suffix="Mbps" defaultValue="45"/>
+    <Select label="Output codec" options={["ProRes 422 HQ","DNxHR SQ","H.264"]}/>
+    <Input label="Preset name" defaultValue="Dailies proxy" error="A preset with this name already exists."/>
+    <div className="col">
+      <Checkbox label="Delete source after transfer" description="Verified checksum required." checked={c} onChange={e=>setC(e.target.checked)}/>
+      <Checkbox label="All clips in bin" indeterminate/>
+      <Checkbox label="Notify on failure" disabled/>
+    </div>
+    <div className="col">
+      <Radio name="m" label="Copy" description="Leave the source untouched." checked={m==='copy'} onChange={()=>setM('copy')}/>
+      <Radio name="m" label="Move" checked={m==='move'} onChange={()=>setM('move')}/>
+      <Switch checked={a} onChange={e=>setA(e.target.checked)} label="Auto-transcode on ingest" description="Runs the default preset when a card mounts."/>
+    </div>
+  </div>);}
+ReactDOM.createRoot(document.getElementById('r')).render(<Demo/>);
+</script></body></html>
