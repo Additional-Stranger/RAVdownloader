@@ -1,75 +1,49 @@
-# RAVdownloader
+# Edit Bay Studio
 
-A premium video and audio downloader for Windows, built with Electron. Download from YouTube and 1000+ sites with quality selection, playlist support, and file conversion.
+The desktop app behind [editbaytools.com](https://editbaytools.com) — an all-in-one
+media toolkit for editors, production engineers and broadcast teams. Eight tools in
+one window: Downloader, Social Media, Convert, Extractor, Merge, Podcast, VO Maker
+and Lower Third.
+
+Built with Electron. Windows (x64) and macOS (Apple silicon).
 
 ## Download
 
-**[Get the latest installer at ColinChristy.cc](https://ColinChristy.cc)** — no prerequisites needed, just install and go.
+Installers are published at <https://editbaytools.com/download/>. A plan is required
+to use the tools; every plan starts with a free trial. See <https://editbaytools.com/pricing/>.
 
-## Features
+## Building from source
 
-- **Video & Audio Downloads** — MP4 video or MP3 audio from YouTube and 1000+ supported sites
-- **Quality Picker** — Choose your resolution (144p–1080p+) or let it auto-select the best
-- **Playlist Support** — Download full playlists or a specific range
-- **YouTube Account Login** — Sign in to access age-restricted, private, and member-only content
-- **File Converter** — Convert between formats (MOV to MP4, AVIF/HEIC to PNG, PDF to PNG, etc.)
-- **Bandwidth Limiter** — Throttle download speed when needed
-- **Built-in Updater** — Update both the app and yt-dlp directly from Settings
-- **Diagnostics & Logs** — Built-in logging and system info for troubleshooting
+Prerequisites:
 
-## Building from Source
-
-### Prerequisites
-
-- [Node.js](https://nodejs.org) (LTS)
-- The following binaries placed in the `bin/` folder:
-
-| Binary | Source |
-|--------|--------|
-| `yt-dlp.exe` | [yt-dlp releases](https://github.com/yt-dlp/yt-dlp/releases/latest) |
-| `ffmpeg.exe` | [gyan.dev ffmpeg builds](https://www.gyan.dev/ffmpeg/builds/) (extract from `bin/` inside the zip) |
-| `ffprobe.exe` | Included in the ffmpeg zip above |
-| `deno.exe` | [Deno releases](https://github.com/denoland/deno/releases/latest) (x86_64 Windows) — required by yt-dlp for YouTube |
-| `icon.ico` | Place in `assets/` — create one at [icoconvert.com](https://icoconvert.com) if needed |
-
-### Install, Run, Build
-
-```bash
-npm install          # install dependencies
-npm start            # run in dev mode
-npm run build        # build the Windows installer → dist/
-```
-
-The installer will be in `dist/RAVdownloader Setup X.X.X.exe`.
-
-## Project Structure
+- [Node.js](https://nodejs.org) LTS
+- Windows: `yt-dlp.exe` and `ffmpeg.exe` (plus `ffprobe.exe`) placed in `bin/`
+- macOS: arm64 builds of the same tools placed in `bin-mac/` (the CI workflow fetches them)
 
 ```
-RAVdownloader/
-├── src/
-│   ├── main.js              # Electron main process
-│   ├── preload.js           # Secure IPC bridge
-│   └── renderer/
-│       └── index.html       # UI (HTML, CSS, JS)
-├── bin/                     # Runtime binaries (not in git)
-│   ├── yt-dlp.exe
-│   ├── ffmpeg.exe
-│   ├── ffprobe.exe
-│   └── deno.exe
-├── assets/
-│   └── icon.ico
-├── build/
-│   └── afterPack.js         # Post-build icon embedding
-├── installer.nsh            # NSIS installer customization
-└── package.json
+npm install
+npm start              # run unpackaged
+npm run build          # Windows NSIS installer  -> dist/
+npm run dist:mac       # macOS DMG (run on a Mac, or use the GitHub Actions workflow)
 ```
 
-## Troubleshooting
+The macOS build runs on GitHub Actions (`.github/workflows/build-mac.yml`) on every
+push to `main`.
 
-| Error | Fix |
-|-------|-----|
-| "yt-dlp not found" | Place `yt-dlp.exe` in the `bin/` folder |
-| "ffmpeg not found" | Place `ffmpeg.exe` in the `bin/` folder |
-| "Requested format is not available" | Place `deno.exe` in `bin/` — yt-dlp needs it for YouTube |
-| App won't start | Run `npm install` again, then `npm start` |
-| Build fails | Make sure `icon.ico` exists in `assets/` |
+## Layout
+
+| Path | What it is |
+|------|------------|
+| `src/main.js` | Electron main process: tools, licence gate, updater, bug reports |
+| `src/auth-client.js` | Sign-in and licence-token client for `api.editbaytools.com` |
+| `src/preload.js` | The bridge the renderer talks through |
+| `src/renderer/` | The UI (`index.html`) and sign-in window (`login.html`) |
+| `build/` | Packaging hooks and the macOS install helper |
+| `installer.nsh` | NSIS additions for the Windows installer |
+| `design-system/` | Component reference used when the UI was built |
+
+## Legal
+
+Terms, privacy, refunds and the EULA live at <https://editbaytools.com/legal/terms/>.
+
+© Edit Bay Tools LLC. All rights reserved.

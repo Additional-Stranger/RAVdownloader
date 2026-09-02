@@ -533,7 +533,9 @@ async function convertPdfToImage(inputPath, outputDir, baseName, imgFormat = 'pn
 
           try {
             const data = new Uint8Array(fs.readFileSync(${JSON.stringify(inputPath)}));
-            const pdf = await pdfjsLib.getDocument({ data, disableWorker: true }).promise;
+            // isEvalSupported:false closes the font-code injection hole in pdf.js
+            // (CVE-2024-4367). PDFs come from anywhere, and this window has Node access.
+            const pdf = await pdfjsLib.getDocument({ data, disableWorker: true, isEvalSupported: false }).promise;
             const canvas = document.getElementById('c');
             const ctx = canvas.getContext('2d');
 
@@ -752,9 +754,9 @@ function createLoginWindow() {
   if (IS_MAC) buildMacMenu(); else Menu.setApplicationMenu(null);
 }
 
-// Development escape hatch: EBS_OPEN_ACCESS=1 skips the gate entirely. It is off
-// by default, so a shipped build always requires a plan.
-const OPEN_ACCESS = process.env.EBS_OPEN_ACCESS === '1';
+// Development escape hatch: EBS_OPEN_ACCESS=1 skips the gate entirely. It only
+// works in an unpackaged (dev) run, so a shipped build always requires a plan.
+const OPEN_ACCESS = isDev && process.env.EBS_OPEN_ACCESS === '1';
 
 /** Tells the renderer where it stands, and remembers it for anything that asks later. */
 function publishLicenseState(state) {
@@ -853,7 +855,7 @@ async function bootstrap() {
   } catch (err) {
     console.error('bootstrap failed:', err);
     dialog.showErrorBox('Edit Bay Studio failed to start',
-      `An error occurred during startup:\n\n${err.message || err}\n\nCheck the terminal for details.`);
+      `An error occurred during startup:\n\n${err.message || err}\n\nPlease try again. If it keeps happening, email Support@editbaytools.com and include this message.`);
     app.quit();
   }
 }

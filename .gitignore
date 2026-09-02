@@ -39,3 +39,9 @@ admin-site/
 
 # Working copy of the pre-rebrand tree. No reason for anyone else to have it.
 .rebrand-backup/
+
+# worker/ is RAVdownloader's update worker, kept locally for that product only.
+worker/
+
+# Editor / patch backups never belong in the public repo.
+*.bak
